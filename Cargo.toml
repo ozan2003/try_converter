@@ -1,5 +1,5 @@
 [package]
-name = "try_trl_conv"
+name = "try_conv"
 version = "0.1.0"
 edition = "2024"
 publish = false

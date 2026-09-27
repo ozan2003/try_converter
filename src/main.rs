@@ -2,7 +2,7 @@
 //! era.
 
 use eframe::egui;
-use try_trl_conv::{
+use try_conv::{
     Amount,
     Era,
     Outcome,
