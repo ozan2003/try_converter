@@ -82,7 +82,9 @@ impl ConverterApp
     /// Draws the reading of the typed amount and of its other-era equivalent.
     fn show_amount(&self, ui: &mut egui::Ui, amount: &Amount)
     {
-        match amount.to_words_lira()
+        // Built once per frame and reused for the typed era's block below.
+        let reading = amount.to_words_lira();
+        match &reading
         {
             Ok(words) =>
             {
@@ -94,10 +96,10 @@ impl ConverterApp
             },
         }
         ui.add_space(6.0);
-        draw_era_line(ui, self.era, amount);
+        draw_era_line(ui, self.era, amount, reading.as_deref().ok());
         match amount.shifted_by_million(conversion_multiplies(self.era))
         {
-            Ok(other) => draw_era_line(ui, other_era(self.era), &other),
+            Ok(other) => draw_era_line(ui, other_era(self.era), &other, None),
             Err(error) =>
             {
                 ui.colored_label(egui::Color32::RED, error.to_string());
@@ -107,15 +109,25 @@ impl ConverterApp
 }
 
 /// Draws one era's digits and reading.
-fn draw_era_line(ui: &mut egui::Ui, era: Era, amount: &Amount)
+fn draw_era_line(
+    ui: &mut egui::Ui,
+    era: Era,
+    amount: &Amount,
+    words: Option<&str>,
+)
 {
-    // The spec keeps the digits line on one line and lets only the reading
-    // wrap.
+    // Both lines wrap: the ceiling can produce a 408-character digits line
+    // (306 digits plus separators), which no window shows on one line.
     ui.add(
         egui::Label::new(format!("{}: {}", era_label(era), amount.grouped()))
-            .wrap_mode(egui::TextWrapMode::Extend),
+            .wrap(),
     );
-    match amount.to_words_lira()
+    let reading = match words
+    {
+        Some(words) => Ok(words.to_owned()),
+        None => amount.to_words_lira(),
+    };
+    match reading
     {
         Ok(words) =>
         {
@@ -168,7 +180,9 @@ fn main() -> eframe::Result
         viewport: egui::ViewportBuilder::default()
             .with_title("TL / TRY Okunuş Çevirici")
             .with_inner_size([760.0, 360.0])
-            .with_min_inner_size([420.0, 260.0]),
+            // Logical points: 760 fits the longest reading, and 520 keeps the
+            // era selector row (about 480 wide) fully visible at the minimum.
+            .with_min_inner_size([520.0, 260.0]),
         ..Default::default()
     };
     eframe::run_native(

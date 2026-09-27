@@ -17,9 +17,9 @@ pub use words::parse_words;
 pub enum Era
 {
     /// Old Turkish lira, the `TRL` code used before 2005 (six extra zeros).
-    #[default]
     OldTrl,
     /// Turkish lira since 2009 (`TRY`); the same scale as 2005-2008 `YTL`.
+    #[default]
     NewTry,
 }
 
@@ -262,6 +262,6 @@ mod tests
         assert_eq!(other_era(Era::NewTry), Era::OldTrl);
         assert!(!conversion_multiplies(Era::OldTrl));
         assert!(conversion_multiplies(Era::NewTry));
-        assert_eq!(Era::default(), Era::OldTrl);
+        assert_eq!(Era::default(), Era::NewTry);
     }
 }

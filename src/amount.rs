@@ -70,8 +70,9 @@ impl Amount
         let mut out = String::with_capacity(
             self.int
                 .len()
+                .saturating_add(self.int.len().checked_div(3).unwrap_or(0))
                 .saturating_add(self.frac.len())
-                .saturating_add(4),
+                .saturating_add(2),
         );
         if self.sign == Sign::Negative
         {

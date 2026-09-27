@@ -9,7 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The default input era is now the new lira (TRY): the app opens anchored to the era people
+  actually use today, and the selector still switches back to the old lira (TRL).
+- Both output lines wrap. The largest representable amount (306 digits plus separators, about 408
+  characters) is wider than any sensible window, and wrapping shows every digit instead of
+  clipping the line.
+- The package and the binary are named `try_conv` (were `try_trl_conv`), and the window id now
+  follows the package name instead of being repeated as a literal.
 - `Error` variants carrying a `String` now carry a `Box<str>` instead.
+
+### Fixed
+
+- The minimum window width fits the era selector row (520 logical points instead of 420, which cut
+  the tail off `Yeni TL (TRY, 2009-)`).
+- The typed era's reading is built once per frame instead of twice.
+- `Amount::grouped` reserves room for the separators it inserts, so the largest amounts no longer
+  reallocate the output string.
+- The scale-table comments mark exactly the derived ranges (10^126..10^150 and so on, not the
+  attested base stems), and the `value_digits(100)` test pins the whole 10^303 string rather than
+  only its length.
 
 ## [0.1.0] - 2026-09-27
 

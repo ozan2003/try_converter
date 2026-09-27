@@ -59,7 +59,7 @@ pub const SCALES: [&str; SCALE_COUNT] = [
     "septentrigintilyon",
     "oktotrigintilyon",
     "novemtrigintilyon",
-    // 10^123 .. 10^150, derived: unit root + katraginta + ilyon.
+    // 10^123 attested; 10^126 .. 10^150 derived: unit + katragint + ilyon.
     "katragintilyon",
     "ankatragintilyon",
     "dokatragintilyon",
@@ -70,7 +70,7 @@ pub const SCALES: [&str; SCALE_COUNT] = [
     "septenkatragintilyon",
     "oktokatragintilyon",
     "novemkatragintilyon",
-    // 10^153 .. 10^180, derived: kenkaginta root.
+    // 10^153 attested; 10^156 .. 10^180 derived: unit + kenkagint + ilyon.
     "kenkagintilyon",
     "ankenkagintilyon",
     "dokenkagintilyon",
@@ -81,7 +81,7 @@ pub const SCALES: [&str; SCALE_COUNT] = [
     "septenkenkagintilyon",
     "oktokenkagintilyon",
     "novemkenkagintilyon",
-    // 10^183 .. 10^210, derived: seksaginta root.
+    // 10^183 attested; 10^186 .. 10^210 derived: unit + seksagint + ilyon.
     "seksagintilyon",
     "anseksagintilyon",
     "doseksagintilyon",
@@ -92,7 +92,7 @@ pub const SCALES: [&str; SCALE_COUNT] = [
     "septenseksagintilyon",
     "oktoseksagintilyon",
     "novemseksagintilyon",
-    // 10^213 .. 10^240, derived: septaginta root.
+    // 10^213 attested; 10^216 .. 10^240 derived: unit + septagint + ilyon.
     "septagintilyon",
     "anseptagintilyon",
     "doseptagintilyon",
@@ -103,7 +103,7 @@ pub const SCALES: [&str; SCALE_COUNT] = [
     "septenseptagintilyon",
     "oktoseptagintilyon",
     "novemseptagintilyon",
-    // 10^243 .. 10^270, derived: oktoginta root.
+    // 10^243 attested; 10^246 .. 10^270 derived: unit + oktogint + ilyon.
     "oktogintilyon",
     "anoktogintilyon",
     "dooktogintilyon",
@@ -114,7 +114,7 @@ pub const SCALES: [&str; SCALE_COUNT] = [
     "septenoktogintilyon",
     "oktooktogintilyon",
     "novemoktogintilyon",
-    // 10^273 .. 10^300, derived: nonaginta root.
+    // 10^273 attested; 10^276 .. 10^300 derived: unit + nonagint + ilyon.
     "nonagintilyon",
     "annonagintilyon",
     "dononagintilyon",
@@ -291,10 +291,14 @@ mod tests
     fn values_are_powers_of_a_thousand()
     {
         assert_eq!(value_digits(0).as_deref(), Some("1000"));
-        assert_eq!(value_digits(100).map(|digits| digits.len()), Some(304));
-        assert_eq!(
-            value_digits(100).map(|digits| digits.ends_with('1')),
-            Some(false)
+        let sentilyon = value_digits(100).expect("index 100 is in range");
+        assert_eq!(sentilyon.len(), 304);
+        assert!(sentilyon.starts_with('1'));
+        assert!(
+            sentilyon
+                .chars()
+                .skip(1)
+                .all(|digit| digit == '0')
         );
         assert_eq!(value_digits(101), None);
     }

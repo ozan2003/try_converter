@@ -222,9 +222,9 @@ struct WordParser
     /// Whether any scale name was consumed.
     any_scale: bool,
     /// Whether `sıfır` appeared.
-    zero: bool,
+    has_encountered_zero: bool,
     /// Whether a leading `eksi` was consumed.
-    negative: bool,
+    has_encountered_negative: bool,
     /// How many tokens other than a lone `sıfır` were consumed.
     other_tokens: usize,
     /// How many value-producing tokens were consumed.
@@ -248,8 +248,8 @@ impl WordParser
             kurus: None,
             column: Column::Integer,
             any_scale: false,
-            zero: false,
-            negative: false,
+            has_encountered_zero: false,
+            has_encountered_negative: false,
             other_tokens: 0,
             token_index: 0,
             value_tokens: 0,
@@ -269,7 +269,7 @@ impl WordParser
         {
             self.other_tokens = self.other_tokens.saturating_add(1);
         }
-        if self.zero && self.other_tokens > 0
+        if self.has_encountered_zero && self.other_tokens > 0
         {
             return Err(Error::StrayZero);
         }
@@ -279,11 +279,11 @@ impl WordParser
         }
         if token == "eksi" || token == "-"
         {
-            if index != 0 || self.negative
+            if index != 0 || self.has_encountered_negative
             {
                 return Err(Error::UnexpectedToken(token.into()));
             }
-            self.negative = true;
+            self.has_encountered_negative = true;
             return Ok(());
         }
         if let Some(scale_index) = scale::index_of(token)
@@ -315,11 +315,11 @@ impl WordParser
     /// Records `sıfır`, which may only stand alone.
     const fn push_zero(&mut self) -> Result<(), Error>
     {
-        if self.other_tokens > 0 || self.zero
+        if self.other_tokens > 0 || self.has_encountered_zero
         {
             return Err(Error::StrayZero);
         }
-        self.zero = true;
+        self.has_encountered_zero = true;
         self.value_tokens = self.value_tokens.saturating_add(1);
         Ok(())
     }
@@ -588,7 +588,7 @@ impl WordParser
         {
             return Err(Error::NotANumber);
         }
-        if self.zero
+        if self.has_encountered_zero
         {
             return Ok(Amount::zero());
         }
@@ -606,7 +606,7 @@ impl WordParser
             Column::Closed =>
             {},
         }
-        let sign = if self.negative
+        let sign = if self.has_encountered_negative
         {
             Sign::Negative
         }
