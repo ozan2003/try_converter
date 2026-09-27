@@ -69,7 +69,7 @@ impl ConverterApp
         ui.separator();
         #[rustfmt::skip]
         ui.small(
-            "Not: 1 Ocak 2005'te 6 sıfır atıldı — 1.000.000 eski TL = 1 yeni TL."
+            "Not: 1 Ocak 2005'te 6 sıfır atıldı - 1.000.000 eski TL = 1 yeni TL."
         );
         #[rustfmt::skip]
         ui.small(
