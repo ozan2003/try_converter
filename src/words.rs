@@ -1,7 +1,7 @@
 //! Turkish words: reading an [`Amount`] aloud and reading an amount back.
 
 use crate::amount::Amount;
-use crate::scale::{self, SCALES};
+use crate::scale::{self, SCALE_COUNT, SCALES};
 use crate::{Error, Sign};
 
 /// Number words for 0..=9; index 0 is unused so a digit can index the array.
@@ -211,8 +211,8 @@ struct WordParser
     filled: GroupSlots,
     /// Index of the scale used last, for the descending check.
     last_scale: Option<usize>,
-    /// Bitset of scale indices already used.
-    used_mask: [u64; 2],
+    /// Scale indices already used, for duplicate detection.
+    used_scales: [bool; SCALE_COUNT],
     /// A digits literal standing for a whole side on its own.
     literal: Option<Amount>,
     /// The kuruş value, once known.
@@ -241,7 +241,7 @@ impl WordParser
             pending: None,
             filled: GroupSlots::default(),
             last_scale: None,
-            used_mask: [0; 2],
+            used_scales: [false; SCALE_COUNT],
             literal: None,
             kurus: None,
             column: Column::Integer,
@@ -320,6 +320,12 @@ impl WordParser
         Ok(())
     }
 
+    /// Reports whether a digits literal already stands for the integer part.
+    fn literal_integer(&self) -> bool
+    {
+        self.column == Column::Integer && self.literal.is_some()
+    }
+
     /// Adds a number word to the current group.
     fn push_number_word(
         &mut self,
@@ -328,7 +334,7 @@ impl WordParser
         token: &str,
     ) -> Result<(), Error>
     {
-        if self.column == Column::Closed
+        if self.column == Column::Closed || self.literal_integer()
         {
             return Err(Error::UnexpectedToken(token.to_owned()));
         }
@@ -343,10 +349,6 @@ impl WordParser
                 if self.filled.units
                 {
                     let units = self.pending.unwrap_or(0);
-                    if !(1..=9).contains(&units)
-                    {
-                        return Err(Error::GroupOutOfRange);
-                    }
                     self.pending = Some(units.saturating_mul(100));
                     self.filled.units = false;
                 }
@@ -503,6 +505,10 @@ impl WordParser
             {
                 return self.set_kurus(value);
             }
+            if self.literal_integer()
+            {
+                return Err(Error::UnexpectedToken(token.to_owned()));
+            }
             self.pending = Some(value);
             self.filled = GroupSlots {
                 hundreds: true,
@@ -534,9 +540,13 @@ impl WordParser
         self.filled = GroupSlots::default();
     }
 
-    /// Records the kuruş value, rejecting anything above 99.
+    /// Records the kuruş value, rejecting anything above 99 and a second value.
     const fn set_kurus(&mut self, value: u32) -> Result<(), Error>
     {
+        if self.kurus.is_some()
+        {
+            return Err(Error::DuplicateKurus);
+        }
         if value > 99
         {
             return Err(Error::KurusOutOfRange);
@@ -548,21 +558,18 @@ impl WordParser
     /// Reports whether a scale index was used before.
     fn scale_used(&self, index: usize) -> bool
     {
-        let word = index.checked_div(64).unwrap_or(0);
-        let flag = scale_flag(index);
-        self.used_mask
-            .get(word)
-            .is_some_and(|mask| mask & flag != 0)
+        self.used_scales
+            .get(index)
+            .copied()
+            .unwrap_or(false)
     }
 
     /// Marks a scale index as used.
     fn mark_scale_used(&mut self, index: usize)
     {
-        let word = index.checked_div(64).unwrap_or(0);
-        let flag = scale_flag(index);
-        if let Some(mask) = self.used_mask.get_mut(word)
+        if let Some(slot) = self.used_scales.get_mut(index)
         {
-            *mask |= flag;
+            *slot = true;
         }
     }
 
@@ -600,31 +607,31 @@ impl WordParser
             Some(amount) => amount.int_digits().to_owned(),
             None => groups_to_digits(&self.groups),
         };
-        let frac = if let Some(amount) = &self.literal
+        // Only a literal that carries a fraction can conflict with a kuruş
+        // value; a whole-number literal settles the lira side on its own.
+        let literal_frac = self
+            .literal
+            .as_ref()
+            .map(Amount::frac_digits)
+            .unwrap_or_default();
+        if !literal_frac.is_empty() && self.kurus.is_some()
         {
-            if self.kurus.is_some()
-            {
-                return Err(Error::ConflictingFraction);
-            }
-            amount.frac_digits().to_owned()
+            return Err(Error::ConflictingFraction);
         }
-        else
+        let frac = if literal_frac.is_empty()
         {
             match self.kurus
             {
                 Some(value) => format!("{value:02}"),
                 None => String::new(),
             }
+        }
+        else
+        {
+            literal_frac.to_owned()
         };
         Amount::from_parts(sign, &int, &frac)
     }
-}
-
-/// Builds the bit flag of a scale index inside its 64-bit word.
-fn scale_flag(index: usize) -> u64
-{
-    let bit = u32::try_from(index.checked_rem(64).unwrap_or(0)).unwrap_or(0);
-    1u64.checked_shl(bit).unwrap_or(0)
 }
 
 /// Writes group values as digits, most significant group first.
@@ -852,6 +859,12 @@ mod tests
             ("yüz iki lira", "102"),
             ("iki yüz üç lira", "203"),
             ("sıfır lira", "0"),
+            ("1.250 lira 75 kuruş", "1.250,75"),
+            ("1.250 lira yetmiş beş kuruş", "1.250,75"),
+            ("İKİ MİLYON 500 BİN LİRA", "2.500.000"),
+            ("250 TRY", "250"),
+            ("250 türk lirası", "250"),
+            ("75 KR", "0,75"),
         ];
         for (input, expected) in cases
         {
@@ -895,6 +908,16 @@ mod tests
             ),
             ("1,50 lira 75 kuruş", crate::Error::ConflictingFraction),
             ("yüz yüz", crate::Error::GroupOutOfRange),
+            ("1-250", crate::Error::NotANumber),
+            (
+                "1.250 75 lira",
+                crate::Error::UnexpectedToken(String::from("75")),
+            ),
+            (
+                "1.250 yetmiş beş lira",
+                crate::Error::UnexpectedToken(String::from("yetmiş")),
+            ),
+            ("1.250 lira 75 25", crate::Error::DuplicateKurus),
         ];
         for (input, expected) in cases
         {
