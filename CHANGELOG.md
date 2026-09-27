@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an `eksi` prefix for negative amounts, an omitted kuruş clause when there is no kuruş, and an
   explicit `yaklaşık` mark plus the dropped digits whenever kuruş cannot hold the fraction.
 - Parsing Turkish amount expressions back into digits: `2 milyon 500 bin lira`, `1.250.000,75 lira`
-  and the app's own readings all round-trip, with `lira`/`kuruş`/`TL`/`TRY`/`kr` tokens,
+  and the app's own exact readings round-trip, while an approximate reading's `yaklaşık` mark is
+  extra text and is not accepted as input, with `lira`/`kuruş`/`TL`/`TRY`/`kr` tokens,
   Turkish-aware case folding, an `eksi` or `-` sign, and a Turkish error naming the token it could not
   use instead of guessing.
 - Exact six-place decimal shift across the 2005 redenomination (multiplying and dividing by

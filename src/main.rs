@@ -82,9 +82,16 @@ impl ConverterApp
     /// Draws the reading of the typed amount and of its other-era equivalent.
     fn show_amount(&self, ui: &mut egui::Ui, amount: &Amount)
     {
-        if let Ok(words) = amount.to_words_lira()
+        match amount.to_words_lira()
         {
-            ui.label(format!("Okunuşu: {words}"));
+            Ok(words) =>
+            {
+                ui.add(egui::Label::new(format!("Okunuşu: {words}")).wrap());
+            },
+            Err(error) =>
+            {
+                ui.colored_label(egui::Color32::RED, error.to_string());
+            },
         }
         ui.add_space(6.0);
         draw_era_line(ui, self.era, amount);
@@ -102,12 +109,17 @@ impl ConverterApp
 /// Draws one era's digits and reading.
 fn draw_era_line(ui: &mut egui::Ui, era: Era, amount: &Amount)
 {
-    ui.label(format!("{}: {}", era_label(era), amount.grouped()));
+    // The spec keeps the digits line on one line and lets only the reading
+    // wrap.
+    ui.add(
+        egui::Label::new(format!("{}: {}", era_label(era), amount.grouped()))
+            .wrap_mode(egui::TextWrapMode::Extend),
+    );
     match amount.to_words_lira()
     {
         Ok(words) =>
         {
-            ui.label(format!("  okunuşu: {words}"));
+            ui.add(egui::Label::new(format!("  okunuşu: {words}")).wrap());
         },
         Err(error) =>
         {

@@ -227,6 +227,8 @@ struct WordParser
     negative: bool,
     /// How many tokens other than a lone `sıfır` were consumed.
     other_tokens: usize,
+    /// How many value-producing tokens were consumed.
+    value_tokens: usize,
     /// Index of the token being pushed, used to reject a misplaced `eksi`.
     token_index: usize,
 }
@@ -250,6 +252,7 @@ impl WordParser
             negative: false,
             other_tokens: 0,
             token_index: 0,
+            value_tokens: 0,
         }
     }
 
@@ -317,6 +320,7 @@ impl WordParser
             return Err(Error::StrayZero);
         }
         self.zero = true;
+        self.value_tokens = self.value_tokens.saturating_add(1);
         Ok(())
     }
 
@@ -338,6 +342,7 @@ impl WordParser
         {
             return Err(Error::UnexpectedToken(token.to_owned()));
         }
+        self.value_tokens = self.value_tokens.saturating_add(1);
         match position
         {
             2 =>
@@ -427,6 +432,7 @@ impl WordParser
         self.mark_scale_used(scale_index);
         self.last_scale = Some(scale_index);
         self.any_scale = true;
+        self.value_tokens = self.value_tokens.saturating_add(1);
         self.pending = None;
         self.filled = GroupSlots::default();
         Ok(())
@@ -471,6 +477,7 @@ impl WordParser
                 if let Some(value) = self.pending.take()
                 {
                     self.filled = GroupSlots::default();
+                    self.value_tokens = self.value_tokens.saturating_add(1);
                     self.set_kurus(value)?;
                 }
             },
@@ -487,6 +494,7 @@ impl WordParser
         {
             return Err(Error::UnexpectedToken(token.to_owned()));
         }
+        self.value_tokens = self.value_tokens.saturating_add(1);
         let plain = token
             .chars()
             .all(|character| character.is_ascii_digit());
@@ -576,6 +584,10 @@ impl WordParser
     /// Builds the amount from the collected state.
     fn finish(mut self) -> Result<Amount, Error>
     {
+        if self.value_tokens == 0
+        {
+            return Err(Error::NotANumber);
+        }
         if self.zero
         {
             return Ok(Amount::zero());
@@ -707,10 +719,14 @@ pub(crate) fn turkish_lowercase(input: &str) -> String
 /// [`Error::ResidueTooLarge`], [`Error::KurusOutOfRange`]), a misplaced token
 /// ([`Error::UnexpectedToken`], [`Error::StrayZero`]), a digits literal that
 /// does not parse ([`Error::NotANumber`] and friends), or a fractional literal
-/// combined with a `kuruş` token ([`Error::ConflictingFraction`]).
+/// combined with a `kuruş` token ([`Error::ConflictingFraction`]). An input
+/// that carries no numeric token at all is [`Error::NotANumber`].
 ///
-/// Surrounding punctuation (`,`, `.`, `·`) is ignored, so the readings this app
-/// prints parse back unchanged; a leading `-` is a sign, like the word `eksi`.
+/// Surrounding punctuation (`,`, `.`, `·`) is ignored, so an exact reading this
+/// app prints parses back unchanged. An approximate reading is not accepted as
+/// input: its `yaklaşık (<remainder> yok sayıldı)` mark is extra text, so the
+/// parser rejects it with [`Error::UnknownWord`] per the grammar. A leading `-`
+/// is a sign, like the word `eksi`.
 pub fn parse_words(input: &str) -> Result<Amount, Error>
 {
     let lowered = turkish_lowercase(input);
@@ -933,6 +949,11 @@ mod tests
                 crate::Error::UnexpectedToken(String::from("iki")),
             ),
             ("1,50 lira 75 kuruş", crate::Error::ConflictingFraction),
+            ("TL", crate::Error::NotANumber),
+            ("lira", crate::Error::NotANumber),
+            ("kuruş", crate::Error::NotANumber),
+            ("eksi", crate::Error::NotANumber),
+            ("kr", crate::Error::NotANumber),
             ("yüz yüz", crate::Error::GroupOutOfRange),
             ("1-250", crate::Error::NotANumber),
             (
@@ -979,6 +1000,25 @@ mod tests
             let parsed =
                 super::parse_words(&reading).expect("reading should parse");
             assert_eq!(parsed, amount, "input: {input} (reading: {reading})");
+        }
+    }
+
+    /// Every scale name survives emission and parsing for its own value.
+    #[test]
+    fn every_scale_round_trips_through_words()
+    {
+        for index in 0..crate::scale::SCALE_COUNT
+        {
+            let digits =
+                crate::scale::value_digits(index).expect("index is in range");
+            let amount = crate::testing::digits(&digits);
+            let reading = amount.to_words_lira().expect("should read");
+            let parsed =
+                super::parse_words(&reading).expect("reading should parse");
+            assert_eq!(
+                parsed, amount,
+                "scale index {index} (reading: {reading})"
+            );
         }
     }
 }

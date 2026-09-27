@@ -611,6 +611,17 @@ mod tests
         assert_eq!(ceiling.shifted_by_million(true), Err(Error::TooManyDigits));
     }
 
+    /// Rounding a ceiling-sized amount past the integer limit is an error, not
+    /// a panic and not a dropped digit.
+    #[test]
+    fn rounding_the_ceiling_past_the_limit_is_an_error()
+    {
+        let ceiling = format!("{},995", "9".repeat(MAX_INT_DIGITS));
+        let amount =
+            super::Amount::parse_tr(&ceiling).expect("input should parse");
+        assert_eq!(amount.rounded_to(2), Err(Error::TooManyDigits));
+    }
+
     /// Rounds half away from zero and reports the dropped digits.
     #[test]
     fn rounds_half_away_from_zero()

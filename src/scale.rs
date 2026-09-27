@@ -195,7 +195,7 @@ mod tests
 {
     //! Unit tests for the scale table, its provenance and its lookup.
 
-    use super::{SCALE_COUNT, SCALES, index_of, value_digits};
+    use super::{SCALE_COUNT, SCALES, SYNONYMS, index_of, value_digits};
 
     /// The canonical table, in one string, so a typo cannot slip in unnoticed.
     const GOLDEN: &str =
@@ -308,5 +308,24 @@ mod tests
         assert_eq!(index_of("undesilyon"), index_of("andesilyon"));
         assert_eq!(index_of("untrigintilyon"), index_of("antrigintilyon"));
         assert_eq!(index_of("milyarr"), None);
+    }
+
+    /// Every synonym resolves to the index of its canonical name, and that
+    /// canonical name is itself in the table.
+    #[test]
+    fn every_synonym_matches_its_canonical_name()
+    {
+        for (alternative, canonical) in SYNONYMS
+        {
+            assert!(
+                index_of(canonical).is_some(),
+                "canonical name {canonical} is missing from SCALES"
+            );
+            assert_eq!(
+                index_of(alternative),
+                index_of(canonical),
+                "alternative: {alternative} canonical: {canonical}"
+            );
+        }
     }
 }
