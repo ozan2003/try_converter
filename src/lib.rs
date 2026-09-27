@@ -10,6 +10,7 @@ pub mod scale;
 pub mod words;
 
 pub use amount::{Amount, MAX_FRAC_DIGITS, MAX_INT_DIGITS, Sign};
+pub use words::parse_words;
 
 /// Every way an amount can fail to parse or to be read.
 #[derive(Clone, Debug, PartialEq, Eq)]
