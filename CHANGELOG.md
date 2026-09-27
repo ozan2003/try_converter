@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   10^6) that never rounds or truncates, so `1.250.000,75` old lira is exactly `1,25000075` new
   lira; and half-away-from-zero rounding to kuruş that reports the digits it dropped instead of
   hiding them.
+- The 101 short-scale names Türkiye uses, `bin` (10^3) through `sentilyon` (10^303), plus the
+  alternative spellings Turkish sources print (`undesilyon`/`andesilyon`, `seksdesilyon`/
+  `sesvigintilyon` and 18 more) accepted on input. The 54 names no source tabulates are derived by
+  that source's own rule and are marked as derived in the code, with the provenance recorded in the
+  module docs.
 - `Amount`: a decimal value held as a sign plus integer and fraction digit strings, so no amount
   is ever stored as a float. Canonical form (no leading integer zeros, no trailing fraction
   zeros, no negative zero) and a Turkish grouping renderer (`1.250.000,75`).
