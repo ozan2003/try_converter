@@ -162,6 +162,12 @@ impl Amount
         {
             return Err(Error::NotANumber);
         }
+        if !body
+            .chars()
+            .any(|character| character.is_ascii_digit())
+        {
+            return Err(Error::NotANumber);
+        }
         let parts = split_separators(body)?;
         if parts.frac.len() > MAX_FRAC_DIGITS
         {
@@ -201,26 +207,20 @@ fn split_sign(input: &str) -> (Sign, &str)
 /// rule.
 fn split_separators(body: &str) -> Result<Separated, Error>
 {
-    match body.matches(',').count()
+    let Some((int_part, frac)) = body.split_once(',')
+    else
     {
-        0 => split_without_comma(body),
-        1 =>
-        {
-            let (int_part, frac) = body
-                .split_once(',')
-                .ok_or(Error::NotANumber)?;
-            if frac.contains('.')
-            {
-                return Err(Error::ForeignSeparators);
-            }
-            let int = strip_thousands(int_part, Error::BadGrouping)?;
-            Ok(Separated {
-                int,
-                frac: frac.to_owned(),
-            })
-        },
-        _ => Err(Error::ForeignSeparators),
+        return split_without_comma(body);
+    };
+    if frac.contains(',') || frac.contains('.')
+    {
+        return Err(Error::ForeignSeparators);
     }
+    let int = strip_thousands(int_part, Error::BadGrouping)?;
+    Ok(Separated {
+        int,
+        frac: frac.to_owned(),
+    })
 }
 
 /// Splits an amount that has no comma.
@@ -230,43 +230,37 @@ fn split_separators(body: &str) -> Result<Separated, Error>
 /// mark. Two or more dots must all be thousands separators.
 fn split_without_comma(body: &str) -> Result<Separated, Error>
 {
-    match body.matches('.').count()
+    let Some((int_part, tail)) = body.split_once('.')
+    else
     {
-        0 => Ok(Separated {
+        return Ok(Separated {
             int: body.to_owned(),
             frac: String::new(),
-        }),
-        1 =>
-        {
-            let (int_part, tail) = body
-                .split_once('.')
-                .ok_or(Error::NotANumber)?;
-            if tail.len() == 3 && is_valid_grouping(body)
-            {
-                let int = strip_thousands(body, Error::ForeignSeparators)?;
-                Ok(Separated {
-                    int,
-                    frac: String::new(),
-                })
-            }
-            else
-            {
-                let int = strip_thousands(int_part, Error::BadGrouping)?;
-                Ok(Separated {
-                    int,
-                    frac: tail.to_owned(),
-                })
-            }
-        },
-        _ =>
-        {
-            let int = strip_thousands(body, Error::ForeignSeparators)?;
-            Ok(Separated {
-                int,
-                frac: String::new(),
-            })
-        },
+        });
+    };
+    if tail.contains('.')
+    {
+        let int = strip_thousands(body, Error::ForeignSeparators)?;
+        return Ok(Separated {
+            int,
+            frac: String::new(),
+        });
     }
+    if tail.len() == 3 && is_valid_grouping(body)
+    {
+        return Ok(Separated {
+            int: remove_dots(body),
+            frac: String::new(),
+        });
+    }
+    if int_part.is_empty()
+    {
+        return Err(Error::NotANumber);
+    }
+    Ok(Separated {
+        int: int_part.to_owned(),
+        frac: tail.to_owned(),
+    })
 }
 
 /// Checks that every dot separates groups of three digits, the first group
@@ -316,6 +310,14 @@ fn strip_thousands(text: &str, error: Error) -> Result<String, Error>
     Ok(text.to_owned())
 }
 
+/// Removes thousands dots from a text already proven to be well grouped.
+fn remove_dots(text: &str) -> String
+{
+    text.chars()
+        .filter(|character| *character != '.')
+        .collect()
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -360,6 +362,7 @@ mod tests
             ("1.234", "1.234"),
             ("1.2345", "1,2345"),
             ("1234.567", "1.234,567"),
+            ("1.234.567", "1.234.567"),
             ("12,345", "12,345"),
             ("0,5", "0,5"),
             ("-5", "-5"),
@@ -384,6 +387,9 @@ mod tests
             ("1 250", Error::NotANumber),
             ("", Error::NotANumber),
             ("abc", Error::NotANumber),
+            ("..", Error::NotANumber),
+            (",,", Error::NotANumber),
+            (".,", Error::NotANumber),
             ("1.23,45", Error::BadGrouping),
         ];
         for (input, expected) in rejected
@@ -423,6 +429,20 @@ mod tests
                 "1".repeat(MAX_FRAC_DIGITS.saturating_add(1))
             )),
             Err(Error::FractionTooLong)
+        );
+        assert_eq!(
+            digits(&"9".repeat(MAX_INT_DIGITS))
+                .grouped()
+                .matches('9')
+                .count(),
+            MAX_INT_DIGITS,
+            "the maximum integer length must be accepted"
+        );
+        let longest_frac = format!("1,{}", "1".repeat(MAX_FRAC_DIGITS));
+        assert_eq!(
+            digits(&longest_frac).grouped(),
+            longest_frac,
+            "the maximum fraction length must be accepted"
         );
     }
 }
