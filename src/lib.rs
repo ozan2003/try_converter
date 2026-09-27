@@ -5,7 +5,7 @@
 //! scale-name and word modules land in later tasks.
 
 pub mod amount;
-// pub mod scale;
+pub mod scale;
 // pub mod words;
 
 pub use amount::{Amount, MAX_FRAC_DIGITS, MAX_INT_DIGITS, Sign};
