@@ -703,15 +703,30 @@ pub(crate) fn turkish_lowercase(input: &str) -> String
 /// combined with a `kuruş` token ([`Error::ConflictingFraction`]).
 ///
 /// Surrounding punctuation (`,`, `.`, `·`) is ignored, so the readings this app
-/// prints parse back unchanged.
+/// prints parse back unchanged; a leading `-` is a sign, like the word `eksi`.
 pub fn parse_words(input: &str) -> Result<Amount, Error>
 {
     let lowered = turkish_lowercase(input);
     let mut parser = WordParser::start();
     for raw in lowered.split_whitespace()
     {
-        let token =
-            raw.trim_matches(|character: char| !character.is_alphanumeric());
+        let trimmed = raw.trim_matches(|character: char| {
+            !character.is_alphanumeric() && character != '-'
+        });
+        if trimmed.is_empty()
+        {
+            continue;
+        }
+        // A leading `-` means negative, exactly like the word `eksi`.
+        let (marker, token) = match trimmed.strip_prefix('-')
+        {
+            Some(rest) => ("-", rest),
+            None => ("", trimmed),
+        };
+        if !marker.is_empty()
+        {
+            parser.push(marker)?;
+        }
         if !token.is_empty()
         {
             parser.push(token)?;
@@ -833,6 +848,10 @@ mod tests
                 "1.000.000.000.000.000.000.000.000.000.000.000.000",
             ),
             ("eksi beş lira", "-5"),
+            ("-5 lira", "-5"),
+            ("yüz iki lira", "102"),
+            ("iki yüz üç lira", "203"),
+            ("sıfır lira", "0"),
         ];
         for (input, expected) in cases
         {
