@@ -355,7 +355,7 @@ fn split_without_comma(body: &str) -> Result<Separated, Error>
 }
 
 /// Checks that every dot separates groups of three digits, the first group
-/// being 1–3.
+/// being 1-3.
 fn is_valid_grouping(text: &str) -> bool
 {
     let mut groups = text.split('.');

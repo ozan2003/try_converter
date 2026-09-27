@@ -281,7 +281,7 @@ impl WordParser
         {
             if index != 0 || self.negative
             {
-                return Err(Error::UnexpectedToken(token.to_owned()));
+                return Err(Error::UnexpectedToken(token.into()));
             }
             self.negative = true;
             return Ok(());
@@ -309,7 +309,7 @@ impl WordParser
         {
             return self.push_literal(token);
         }
-        Err(Error::UnknownWord(token.to_owned()))
+        Err(Error::UnknownWord(token.into()))
     }
 
     /// Records `sıfır`, which may only stand alone.
@@ -340,7 +340,7 @@ impl WordParser
     {
         if self.column == Column::Closed || self.literal_integer()
         {
-            return Err(Error::UnexpectedToken(token.to_owned()));
+            return Err(Error::UnexpectedToken(token.into()));
         }
         self.value_tokens = self.value_tokens.saturating_add(1);
         match position
@@ -402,7 +402,7 @@ impl WordParser
     {
         if self.column != Column::Integer
         {
-            return Err(Error::UnexpectedToken(token.to_owned()));
+            return Err(Error::UnexpectedToken(token.into()));
         }
         if self.literal.is_some()
         {
@@ -410,7 +410,7 @@ impl WordParser
         }
         if self.scale_used(scale_index)
         {
-            return Err(Error::DuplicateScale(token.to_owned()));
+            return Err(Error::DuplicateScale(token.into()));
         }
         if self
             .last_scale
@@ -452,7 +452,7 @@ impl WordParser
             Column::Kurus if self.pending.is_none() => Ok(()),
             Column::Kurus | Column::Closed =>
             {
-                Err(Error::UnexpectedToken(token.to_owned()))
+                Err(Error::UnexpectedToken(token.into()))
             },
         }
     }
@@ -492,7 +492,7 @@ impl WordParser
     {
         if self.column == Column::Closed
         {
-            return Err(Error::UnexpectedToken(token.to_owned()));
+            return Err(Error::UnexpectedToken(token.into()));
         }
         self.value_tokens = self.value_tokens.saturating_add(1);
         let plain = token
@@ -515,7 +515,7 @@ impl WordParser
             }
             if self.literal_integer()
             {
-                return Err(Error::UnexpectedToken(token.to_owned()));
+                return Err(Error::UnexpectedToken(token.into()));
             }
             self.pending = Some(value);
             self.filled = GroupSlots {
@@ -918,36 +918,25 @@ mod tests
     #[test]
     fn rejects_malformed_expressions()
     {
+        #[rustfmt::skip]
         let cases = [
             (
                 "iki milyon üç milyon",
-                crate::Error::DuplicateScale(String::from("milyon")),
+                crate::Error::DuplicateScale("milyon".into()),
             ),
-            ("bin bin", crate::Error::DuplicateScale(String::from("bin"))),
+            ("bin bin", crate::Error::DuplicateScale("bin".into())),
             ("üç milyon iki milyar", crate::Error::ScaleOrder),
-            (
-                "milyarr",
-                crate::Error::UnknownWord(String::from("milyarr")),
-            ),
+            ("milyarr", crate::Error::UnknownWord("milyarr".into())), // note the extra r
             ("sıfır iki", crate::Error::StrayZero),
             ("sıfır kuruş", crate::Error::StrayZero),
             ("yüz kuruş", crate::Error::KurusOutOfRange),
             ("250 kuruş", crate::Error::KurusOutOfRange),
             ("75 kuruş kuruş", crate::Error::DuplicateKurus),
-            (
-                "75 kuruş 25",
-                crate::Error::UnexpectedToken(String::from("25")),
-            ),
+            ("75 kuruş 25", crate::Error::UnexpectedToken("25".into())),
             ("iki milyon 1500", crate::Error::ResidueTooLarge),
             ("2500 bin", crate::Error::GroupOutOfRange),
-            (
-                "iki lira üç milyon",
-                crate::Error::UnexpectedToken(String::from("milyon")),
-            ),
-            (
-                "üç kuruş iki",
-                crate::Error::UnexpectedToken(String::from("iki")),
-            ),
+            ("iki lira üç milyon", crate::Error::UnexpectedToken("milyon".into())),
+            ("üç kuruş iki", crate::Error::UnexpectedToken("iki".into())),
             ("1,50 lira 75 kuruş", crate::Error::ConflictingFraction),
             ("TL", crate::Error::NotANumber),
             ("lira", crate::Error::NotANumber),
@@ -956,16 +945,11 @@ mod tests
             ("kr", crate::Error::NotANumber),
             ("yüz yüz", crate::Error::GroupOutOfRange),
             ("1-250", crate::Error::NotANumber),
-            (
-                "1.250 75 lira",
-                crate::Error::UnexpectedToken(String::from("75")),
-            ),
-            (
-                "1.250 yetmiş beş lira",
-                crate::Error::UnexpectedToken(String::from("yetmiş")),
-            ),
+            ("1.250 75 lira", crate::Error::UnexpectedToken("75".into())),
+            ("1.250 yetmiş beş lira", crate::Error::UnexpectedToken("yetmiş".into())),
             ("1.250 lira 75 25", crate::Error::DuplicateKurus),
         ];
+
         for (input, expected) in cases
         {
             assert_eq!(
@@ -980,6 +964,7 @@ mod tests
     #[test]
     fn round_trips_through_words()
     {
+        #[rustfmt::skip]
         let corpus = [
             "0",
             "1",
@@ -990,9 +975,9 @@ mod tests
             "1.250.000,75",
             "0,03",
             "5.432.100.000.000.000.000.000.000.000",
-            "1.000.000.000.000.000.000.000.000.000.000.000.000.000.000.000.\
-             000.000.000.000",
+            "1.000.000.000.000.000.000.000.000.000.000.000.000.000.000.000.000.000.000.000",
         ];
+
         for input in corpus
         {
             let amount = crate::testing::digits(input);

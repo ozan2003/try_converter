@@ -9,7 +9,7 @@ pub const SCALE_COUNT: usize = 101;
 /// Canonical spellings come from the Turkish Wikipedia table
 /// <https://tr.wikipedia.org/wiki/B%C3%BCy%C3%BCk_say%C4%B1lar%C4%B1n_adlar%C4%B1>
 /// (its extension table; the page states short scale is what Türkiye uses). The
-/// 54 entries for indices 41–49, 51–59, 61–69, 71–79, 81–89 and 91–99 are
+/// 54 entries for indices 41-49, 51-59, 61-69, 71-79, 81-89 and 91-99 are
 /// **derived — not tabulated by any Turkish source**; they follow that
 /// article's own rule (unit root + tens root + `ilyon`) with the roots pinned
 /// from the spellings the article attests, and are covered by

@@ -42,7 +42,7 @@ impl ConverterApp
                 Era::OldTrl,
                 "Eski TL (TRL, 2005 öncesi)",
             );
-            ui.radio_value(&mut self.era, Era::NewTry, "Yeni TL (TRY, 2009–)");
+            ui.radio_value(&mut self.era, Era::NewTry, "Yeni TL (TRY, 2009-)");
         });
         ui.horizontal(|ui| {
             ui.label("Tutar ya da okunuşu:");
@@ -74,7 +74,7 @@ impl ConverterApp
              TL.",
         );
         ui.small(
-            "2005–2008 arası \"Yeni Türk Lirası (YTL)\" adı kullanıldı; \
+            "2005-2008 arası \"Yeni Türk Lirası (YTL)\" adı kullanıldı; \
              değeri TL ile aynıdır.",
         );
     }
@@ -172,7 +172,7 @@ fn main() -> eframe::Result
         ..Default::default()
     };
     eframe::run_native(
-        "try_trl_conv",
+        env!("CARGO_PKG_NAME"),
         options,
         Box::new(|cc| {
             apply_text_sizes(&cc.egui_ctx);

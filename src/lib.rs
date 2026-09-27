@@ -19,7 +19,7 @@ pub enum Era
     /// Old Turkish lira, the `TRL` code used before 2005 (six extra zeros).
     #[default]
     OldTrl,
-    /// Turkish lira since 2009 (`TRY`); the same scale as 2005–2008 `YTL`.
+    /// Turkish lira since 2009 (`TRY`); the same scale as 2005-2008 `YTL`.
     NewTry,
 }
 
@@ -94,14 +94,14 @@ pub enum Error
     /// The text is not an amount at all.
     NotANumber,
     /// A word is not a Turkish number word (carries the word).
-    UnknownWord(String),
+    UnknownWord(Box<str>),
     /// Scale names are not strictly descending.
     ScaleOrder,
     /// A scale name is used twice (carries the name).
-    DuplicateScale(String),
-    /// A group value is outside 1–999.
+    DuplicateScale(Box<str>),
+    /// A group value is outside 1-999.
     GroupOutOfRange,
-    /// A kuruş value is outside 0–99.
+    /// A kuruş value is outside 0-99.
     KurusOutOfRange,
     /// The `kuruş` token appears twice.
     DuplicateKurus,
@@ -110,7 +110,7 @@ pub enum Error
     /// `sıfır` is used next to other tokens.
     StrayZero,
     /// A token is in a position where it cannot appear (carries the token).
-    UnexpectedToken(String),
+    UnexpectedToken(Box<str>),
     /// A fractional digits literal is combined with a `kuruş` token.
     ConflictingFraction,
 }
@@ -155,9 +155,9 @@ impl std::fmt::Display for Error
             },
             Self::GroupOutOfRange =>
             {
-                f.write_str("Ölçekten önceki grup 1–999 arasında olmalı")
+                f.write_str("Ölçekten önceki grup 1-999 arasında olmalı")
             },
-            Self::KurusOutOfRange => f.write_str("Kuruş 0–99 arasında olmalı"),
+            Self::KurusOutOfRange => f.write_str("Kuruş 0-99 arasında olmalı"),
             Self::DuplicateKurus => f.write_str("Kuruş iki kez kullanılmış"),
             Self::ResidueTooLarge => f.write_str(
                 "Ölçekten sonra gelen artık 1000'den küçük olmalı — ör. \"2 \
