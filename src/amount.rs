@@ -1,5 +1,7 @@
 //! The decimal value behind every amount, held as digit strings.
 
+use crate::Error;
+
 /// Largest number of significant integer digits that can be read aloud.
 ///
 /// 306 digits is 102 groups of three, reaching the top of the scale names:
@@ -98,6 +100,220 @@ impl Amount
         }
         out
     }
+
+    /// Builds an amount from digit strings, canonicalising both parts.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotANumber`] when a part holds a non-digit, and
+    /// [`Error::TooManyDigits`] when the integer part is longer than
+    /// [`MAX_INT_DIGITS`].
+    pub(crate) fn from_parts(
+        sign: Sign,
+        int: &str,
+        frac: &str,
+    ) -> Result<Self, Error>
+    {
+        if !int
+            .chars()
+            .all(|character| character.is_ascii_digit()) ||
+            !frac
+                .chars()
+                .all(|character| character.is_ascii_digit())
+        {
+            return Err(Error::NotANumber);
+        }
+        let trimmed = int.trim_start_matches('0');
+        let int = if trimmed.is_empty() { "0" } else { trimmed };
+        if int.len() > MAX_INT_DIGITS
+        {
+            return Err(Error::TooManyDigits);
+        }
+        let frac = frac.trim_end_matches('0');
+        let sign = if int == "0" && frac.is_empty()
+        {
+            Sign::Positive
+        }
+        else
+        {
+            sign
+        };
+        Ok(Self::assemble(sign, int, frac))
+    }
+
+    /// Parses digits written the Turkish way, also accepting a foreign decimal
+    /// dot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::NotANumber`] when the text is not an amount,
+    /// [`Error::ForeignSeparators`] or [`Error::BadGrouping`] when separators
+    /// do not follow Turkish convention, [`Error::TooManyDigits`] above
+    /// [`MAX_INT_DIGITS`] integer digits and [`Error::FractionTooLong`]
+    /// above [`MAX_FRAC_DIGITS`] fraction digits.
+    pub fn parse_tr(input: &str) -> Result<Self, Error>
+    {
+        let trimmed = input.trim();
+        let (sign, body) = split_sign(trimmed);
+        let allowed = |character: char| {
+            character.is_ascii_digit() || character == '.' || character == ','
+        };
+        if body.is_empty() || !body.chars().all(allowed)
+        {
+            return Err(Error::NotANumber);
+        }
+        let parts = split_separators(body)?;
+        if parts.frac.len() > MAX_FRAC_DIGITS
+        {
+            return Err(Error::FractionTooLong);
+        }
+        Self::from_parts(sign, &parts.int, &parts.frac)
+    }
+}
+
+/// An integer part and a fraction part, both holding only digits.
+struct Separated
+{
+    /// Integer digits, with thousands separators removed.
+    int: String,
+    /// Fraction digits, empty when there is none.
+    frac: String,
+}
+
+/// Splits a leading sign off an amount.
+fn split_sign(input: &str) -> (Sign, &str)
+{
+    if let Some(rest) = input.strip_prefix('-')
+    {
+        (Sign::Negative, rest)
+    }
+    else if let Some(rest) = input.strip_prefix('+')
+    {
+        (Sign::Positive, rest)
+    }
+    else
+    {
+        (Sign::Positive, input)
+    }
+}
+
+/// Splits digits into an integer and a fraction part, following the dual-format
+/// rule.
+fn split_separators(body: &str) -> Result<Separated, Error>
+{
+    match body.matches(',').count()
+    {
+        0 => split_without_comma(body),
+        1 =>
+        {
+            let (int_part, frac) = body
+                .split_once(',')
+                .ok_or(Error::NotANumber)?;
+            if frac.contains('.')
+            {
+                return Err(Error::ForeignSeparators);
+            }
+            let int = strip_thousands(int_part, Error::BadGrouping)?;
+            Ok(Separated {
+                int,
+                frac: frac.to_owned(),
+            })
+        },
+        _ => Err(Error::ForeignSeparators),
+    }
+}
+
+/// Splits an amount that has no comma.
+///
+/// A lone dot is a thousands separator when it is followed by exactly three
+/// digits *and* the whole text groups correctly; otherwise it is the decimal
+/// mark. Two or more dots must all be thousands separators.
+fn split_without_comma(body: &str) -> Result<Separated, Error>
+{
+    match body.matches('.').count()
+    {
+        0 => Ok(Separated {
+            int: body.to_owned(),
+            frac: String::new(),
+        }),
+        1 =>
+        {
+            let (int_part, tail) = body
+                .split_once('.')
+                .ok_or(Error::NotANumber)?;
+            if tail.len() == 3 && is_valid_grouping(body)
+            {
+                let int = strip_thousands(body, Error::ForeignSeparators)?;
+                Ok(Separated {
+                    int,
+                    frac: String::new(),
+                })
+            }
+            else
+            {
+                let int = strip_thousands(int_part, Error::BadGrouping)?;
+                Ok(Separated {
+                    int,
+                    frac: tail.to_owned(),
+                })
+            }
+        },
+        _ =>
+        {
+            let int = strip_thousands(body, Error::ForeignSeparators)?;
+            Ok(Separated {
+                int,
+                frac: String::new(),
+            })
+        },
+    }
+}
+
+/// Checks that every dot separates groups of three digits, the first group
+/// being 1–3.
+fn is_valid_grouping(text: &str) -> bool
+{
+    let mut groups = text.split('.');
+    let first_ok = groups.next().is_some_and(|first| {
+        (1..=3).contains(&first.len()) &&
+            first
+                .chars()
+                .all(|character| character.is_ascii_digit())
+    });
+    first_ok &&
+        groups.all(|group| {
+            group.len() == 3 &&
+                group
+                    .chars()
+                    .all(|character| character.is_ascii_digit())
+        })
+}
+
+/// Validates thousands separators and returns the digits without dots.
+fn strip_thousands(text: &str, error: Error) -> Result<String, Error>
+{
+    if text.is_empty()
+    {
+        return Err(Error::NotANumber);
+    }
+    if !text
+        .chars()
+        .all(|character| character.is_ascii_digit() || character == '.')
+    {
+        return Err(Error::NotANumber);
+    }
+    if text.contains('.')
+    {
+        if !is_valid_grouping(text)
+        {
+            return Err(error);
+        }
+        return Ok(text
+            .chars()
+            .filter(|character| *character != '.')
+            .collect());
+    }
+    Ok(text.to_owned())
 }
 
 #[cfg(test)]
@@ -105,7 +321,9 @@ mod tests
 {
     //! Unit tests for the amount value and its Turkish formatting.
 
-    use super::{Amount, Sign};
+    use super::{Amount, MAX_FRAC_DIGITS, MAX_INT_DIGITS, Sign};
+    use crate::Error;
+    use crate::testing::digits;
 
     /// Formats an amount built straight from digits.
     fn grouped(sign: Sign, int: &str, frac: &str) -> String
@@ -130,5 +348,81 @@ mod tests
     fn zero_is_a_single_digit()
     {
         assert_eq!(Amount::zero().grouped(), "0");
+    }
+
+    /// Accepts Turkish digits and a foreign-only decimal dot.
+    #[test]
+    fn parses_dual_format()
+    {
+        let cases = [
+            ("1.250.000,75", "1.250.000,75"),
+            ("1234567.89", "1.234.567,89"),
+            ("1.234", "1.234"),
+            ("1.2345", "1,2345"),
+            ("1234.567", "1.234,567"),
+            ("12,345", "12,345"),
+            ("0,5", "0,5"),
+            ("-5", "-5"),
+            ("+5", "5"),
+            ("1,", "1"),
+        ];
+        for (input, expected) in cases
+        {
+            assert_eq!(digits(input).grouped(), expected, "input: {input}");
+        }
+    }
+
+    /// Rejects foreign and ambiguous separators, and overlong input.
+    #[test]
+    fn rejects_foreign_separators()
+    {
+        let rejected = [
+            ("1,234,567.89", Error::ForeignSeparators),
+            ("1.234.56", Error::ForeignSeparators),
+            ("12.34.567", Error::ForeignSeparators),
+            ("1,2.3", Error::ForeignSeparators),
+            ("1 250", Error::NotANumber),
+            ("", Error::NotANumber),
+            ("abc", Error::NotANumber),
+            ("1.23,45", Error::BadGrouping),
+        ];
+        for (input, expected) in rejected
+        {
+            assert_eq!(
+                super::Amount::parse_tr(input),
+                Err(expected),
+                "input: {input}"
+            );
+        }
+    }
+
+    /// Strips leading integer zeros, trailing fraction zeros and a negative
+    /// zero.
+    #[test]
+    fn canonicalises_digits()
+    {
+        assert_eq!(digits("007,500").grouped(), "7,5");
+        assert_eq!(digits("-0,0").grouped(), "0");
+        assert_eq!(digits("0,50").grouped(), "0,5");
+    }
+
+    /// Rejects letters, oversized integers and overlong fractions.
+    #[test]
+    fn rejects_bad_digits()
+    {
+        assert_eq!(super::Amount::parse_tr("1a"), Err(Error::NotANumber));
+        assert_eq!(
+            super::Amount::parse_tr(
+                &"9".repeat(MAX_INT_DIGITS.saturating_add(1))
+            ),
+            Err(Error::TooManyDigits)
+        );
+        assert_eq!(
+            super::Amount::parse_tr(&format!(
+                "1,{}",
+                "1".repeat(MAX_FRAC_DIGITS.saturating_add(1))
+            )),
+            Err(Error::FractionTooLong)
+        );
     }
 }

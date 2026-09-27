@@ -109,3 +109,16 @@ impl std::fmt::Display for Error
         }
     }
 }
+
+/// Helpers shared by the unit tests of this crate.
+#[cfg(test)]
+pub(crate) mod testing
+{
+    use crate::Amount;
+
+    /// Parses digits, expecting success.
+    pub fn digits(input: &str) -> Amount
+    {
+        Amount::parse_tr(input).expect("digits should parse")
+    }
+}
