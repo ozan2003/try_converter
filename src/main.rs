@@ -25,7 +25,12 @@ impl eframe::App for ConverterApp
 {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame)
     {
-        egui::CentralPanel::default().show(ui, |ui| self.contents(ui));
+        egui::CentralPanel::default().show(ui, |ui| {
+            // A long amount makes the output taller than the window. Without
+            // this scroll area the second era block and the footer notes are
+            // cut off, and no scrollbar appears.
+            egui::ScrollArea::vertical().show(ui, |ui| self.contents(ui));
+        });
     }
 }
 
@@ -150,7 +155,7 @@ const fn era_label(era: Era) -> &'static str
     }
 }
 
-/// Sets the base text sizes, in logical points.
+/// Sets the base text sizes and the scrollbar style, in logical points.
 ///
 /// egui's defaults (13 pt body, 9 pt small) are tuned for dense desktop
 /// displays and read as small at the 125 % scaling this app was reported on.
@@ -170,6 +175,11 @@ fn apply_text_sizes(ctx: &egui::Context)
                 .text_styles
                 .insert(text_style, egui::FontId::proportional(points));
         }
+        // egui's default scrollbar floats over the content and appears only
+        // while the pointer is inside the scroll area, so a clipped page looks
+        // like a dead end. A solid bar keeps its own column and shows whenever
+        // the content is taller than the window.
+        style.spacing.scroll = egui::style::ScrollStyle::solid();
     });
 }
 

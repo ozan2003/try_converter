@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A long amount no longer pushes the second era block and the footer notes out of the window: the
+  content scrolls when it is taller than the window.
 - The minimum window width fits the era selector row (520 logical points instead of 420, which cut
   the tail off `Yeni TL (TRY, 2009-)`).
 - The typed era's reading is built once per frame instead of twice.
