@@ -2,14 +2,7 @@
 //! era.
 
 use eframe::egui;
-use try_conv::{
-    Amount,
-    Era,
-    Outcome,
-    conversion_multiplies,
-    interpret,
-    other_era,
-};
+use try_conv::{Amount, Era, Outcome, interpret};
 
 /// Application state: what the user typed and which era it is written in.
 #[derive(Default)]
@@ -74,13 +67,13 @@ impl ConverterApp
             },
         }
         ui.separator();
+        #[rustfmt::skip]
         ui.small(
-            "Not: 1 Ocak 2005'te 6 sıfır atıldı — 1.000.000 eski TL = 1 yeni \
-             TL.",
+            "Not: 1 Ocak 2005'te 6 sıfır atıldı — 1.000.000 eski TL = 1 yeni TL."
         );
+        #[rustfmt::skip]
         ui.small(
-            "2005-2008 arası \"Yeni Türk Lirası (YTL)\" adı kullanıldı; \
-             değeri TL ile aynıdır.",
+            "2005-2008 arası \"Yeni Türk Lirası (YTL)\" adı kullanıldı; değeri TL ile aynıdır.",
         );
     }
 
@@ -100,11 +93,16 @@ impl ConverterApp
                 ui.colored_label(egui::Color32::RED, error.to_string());
             },
         }
+
         ui.add_space(6.0);
+
         draw_era_line(ui, self.era, amount, reading.as_deref().ok());
-        match amount.shifted_by_million(conversion_multiplies(self.era))
+        match amount.shifted_by_million(self.era.conversion_multiplies())
         {
-            Ok(other) => draw_era_line(ui, other_era(self.era), &other, None),
+            Ok(other) =>
+            {
+                draw_era_line(ui, self.era.other_era(), &other, None);
+            },
             Err(error) =>
             {
                 ui.colored_label(egui::Color32::RED, error.to_string());
@@ -123,15 +121,14 @@ fn draw_era_line(
 {
     // Both lines wrap: the ceiling can produce a 408-character digits line
     // (306 digits plus separators), which no window shows on one line.
-    ui.add(
-        egui::Label::new(format!("{}: {}", era_label(era), amount.grouped()))
-            .wrap(),
-    );
+    ui.add(egui::Label::new(format!("{}: {}", era, amount.grouped())).wrap());
+
     let reading = match words
     {
         Some(words) => Ok(words.to_owned()),
         None => amount.to_words_lira(),
     };
+
     match reading
     {
         Ok(words) =>
@@ -142,16 +139,6 @@ fn draw_era_line(
         {
             ui.colored_label(egui::Color32::RED, error.to_string());
         },
-    }
-}
-
-/// The Turkish label of an era.
-const fn era_label(era: Era) -> &'static str
-{
-    match era
-    {
-        Era::OldTrl => "Eski TL (TRL)",
-        Era::NewTry => "Yeni TL (TRY)",
     }
 }
 

@@ -74,19 +74,25 @@ impl Amount
                 .saturating_add(self.frac.len())
                 .saturating_add(2),
         );
+
         if self.sign == Sign::Negative
         {
             out.push('-');
         }
-        let head_len = self.int.len().checked_rem(3).unwrap_or(0);
-        let (head, tail) = self.int.split_at(head_len);
+
+        let (head, tail) = {
+            let head_len = self.int.len().checked_rem(3).unwrap_or(0);
+            self.int.split_at(head_len)
+        };
+
         out.push_str(head);
-        let mut first_group = head.is_empty();
+
+        let mut is_first_group = head.is_empty();
         for chunk in tail.as_bytes().chunks(3)
         {
-            if first_group
+            if is_first_group
             {
-                first_group = false;
+                is_first_group = false;
             }
             else
             {
@@ -97,6 +103,7 @@ impl Amount
                 out.push(char::from(*byte));
             }
         }
+
         if !self.frac.is_empty()
         {
             out.push(',');
@@ -127,12 +134,17 @@ impl Amount
         {
             return Err(Error::NotANumber);
         }
-        let trimmed = int.trim_start_matches('0');
-        let int = if trimmed.is_empty() { "0" } else { trimmed };
+
+        let int = {
+            let trimmed = int.trim_start_matches('0');
+            if trimmed.is_empty() { "0" } else { trimmed }
+        };
+
         if int.len() > MAX_INT_DIGITS
         {
             return Err(Error::TooManyDigits);
         }
+
         let frac = frac.trim_end_matches('0');
         let sign = if int == "0" && frac.is_empty()
         {
@@ -157,21 +169,25 @@ impl Amount
     /// above [`MAX_FRAC_DIGITS`] fraction digits.
     pub fn parse_tr(input: &str) -> Result<Self, Error>
     {
-        let trimmed = input.trim();
-        let (sign, body) = split_sign(trimmed);
-        let allowed = |character: char| {
-            character.is_ascii_digit() || character == '.' || character == ','
+        let (sign, body) = {
+            let trimmed = input.trim();
+            split_sign(trimmed)
         };
+
+        let allowed = |ch: char| ch.is_ascii_digit() || ch == '.' || ch == ',';
+
         if body.is_empty() || !body.chars().all(allowed)
         {
             return Err(Error::NotANumber);
         }
+
         if !body
             .chars()
             .any(|character| character.is_ascii_digit())
         {
             return Err(Error::NotANumber);
         }
+
         let parts = split_separators(body)?;
         if parts.frac.len() > MAX_FRAC_DIGITS
         {
@@ -229,14 +245,17 @@ impl Amount
     {
         let keep_len = usize::from(frac_digits).min(self.frac.len());
         let (keep, dropped) = self.frac.split_at(keep_len);
+
         if dropped.is_empty()
         {
             return Ok((self.clone(), None));
         }
+
         let rounds_up = dropped
             .as_bytes()
             .first()
             .is_some_and(|byte| *byte >= b'5');
+
         let (int, frac) = if rounds_up
         {
             increment(self.int.as_str(), keep)
@@ -245,6 +264,7 @@ impl Amount
         {
             (self.int.clone(), keep.to_owned())
         };
+
         let amount = Self::from_parts(self.sign, &int, &frac)?;
         let places = "0".repeat(keep_len);
         Ok((amount, Some(format!("0,{places}{dropped}"))))
@@ -304,10 +324,12 @@ fn split_separators(body: &str) -> Result<Separated, Error>
     {
         return split_without_comma(body);
     };
+
     if frac.contains(',') || frac.contains('.')
     {
         return Err(Error::ForeignSeparators);
     }
+
     let int = strip_thousands(int_part, Error::BadGrouping)?;
     Ok(Separated {
         int,
@@ -330,6 +352,7 @@ fn split_without_comma(body: &str) -> Result<Separated, Error>
             frac: String::new(),
         });
     };
+
     if tail.contains('.')
     {
         let int = strip_thousands(body, Error::ForeignSeparators)?;
@@ -338,6 +361,7 @@ fn split_without_comma(body: &str) -> Result<Separated, Error>
             frac: String::new(),
         });
     }
+
     if tail.len() == 3 && is_valid_grouping(body)
     {
         return Ok(Separated {
@@ -345,10 +369,12 @@ fn split_without_comma(body: &str) -> Result<Separated, Error>
             frac: String::new(),
         });
     }
+
     if int_part.is_empty()
     {
         return Err(Error::NotANumber);
     }
+
     Ok(Separated {
         int: int_part.to_owned(),
         frac: tail.to_owned(),
@@ -360,12 +386,14 @@ fn split_without_comma(body: &str) -> Result<Separated, Error>
 fn is_valid_grouping(text: &str) -> bool
 {
     let mut groups = text.split('.');
+
     let first_ok = groups.next().is_some_and(|first| {
         (1..=3).contains(&first.len()) &&
             first
                 .chars()
                 .all(|character| character.is_ascii_digit())
     });
+
     first_ok &&
         groups.all(|group| {
             group.len() == 3 &&
@@ -382,12 +410,14 @@ fn strip_thousands(text: &str, error: Error) -> Result<String, Error>
     {
         return Err(Error::NotANumber);
     }
+
     if !text
         .chars()
         .all(|character| character.is_ascii_digit() || character == '.')
     {
         return Err(Error::NotANumber);
     }
+
     if text.contains('.')
     {
         if !is_valid_grouping(text)
@@ -418,6 +448,7 @@ fn increment(int: &str, frac: &str) -> (String, String)
         .chain(frac.bytes())
         .map(|byte| byte.saturating_sub(b'0'))
         .collect();
+
     let mut index = digits.len().saturating_sub(1);
     loop
     {
@@ -430,10 +461,12 @@ fn increment(int: &str, frac: &str) -> (String, String)
             }
             break;
         }
+
         if let Some(slot) = digits.get_mut(index)
         {
             *slot = 0;
         }
+
         if index == 0
         {
             digits.insert(0, 1);
@@ -445,8 +478,12 @@ fn increment(int: &str, frac: &str) -> (String, String)
         .iter()
         .map(|digit| char::from(digit.saturating_add(b'0')))
         .collect();
-    let split = all.len().saturating_sub(frac.len());
-    let (int_out, frac_out) = all.split_at(split);
+
+    let (int_out, frac_out) = {
+        let split = all.len().saturating_sub(frac.len());
+        all.split_at(split)
+    };
+
     (int_out.to_owned(), frac_out.to_owned())
 }
 

@@ -23,6 +23,42 @@ pub enum Era
     NewTry,
 }
 
+impl Era
+{
+    /// Returns the era an amount converts into.
+    #[must_use]
+    pub const fn other_era(self) -> Self
+    {
+        match self
+        {
+            Self::OldTrl => Self::NewTry,
+            Self::NewTry => Self::OldTrl,
+        }
+    }
+
+    /// Reports whether converting out of `era` multiplies by 10^6.
+    ///
+    /// New lira go back to old lira by multiplying; old lira come to new lira
+    /// by dividing.
+    #[must_use]
+    pub const fn conversion_multiplies(self) -> bool
+    {
+        matches!(self, Self::NewTry)
+    }
+}
+
+impl std::fmt::Display for Era
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        match self
+        {
+            Self::OldTrl => f.write_str("Eski TL (TRL)"),
+            Self::NewTry => f.write_str("Yeni TL (TRY)"),
+        }
+    }
+}
+
 /// What raw input turned out to be.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome
@@ -33,50 +69,6 @@ pub enum Outcome
     FromNumber(Amount),
     /// The input was read as Turkish words.
     FromWords(Amount),
-}
-
-/// Returns the era an amount converts into.
-#[must_use]
-pub const fn other_era(era: Era) -> Era
-{
-    match era
-    {
-        Era::OldTrl => Era::NewTry,
-        Era::NewTry => Era::OldTrl,
-    }
-}
-
-/// Reports whether converting out of `era` multiplies by 10^6.
-///
-/// New lira go back to old lira by multiplying; old lira come to new lira by
-/// dividing.
-#[must_use]
-pub const fn conversion_multiplies(era: Era) -> bool
-{
-    matches!(era, Era::NewTry)
-}
-
-/// Routes raw input to the digits path or the words path.
-///
-/// The words path runs when any token is a Turkish number word or a currency
-/// token, so `2 milyon 500 bin`, `1.250.000,75 lira` and `1.250.000,75` all
-/// reach the same amount.
-///
-/// # Errors
-///
-/// Returns whatever the chosen parser reports; see [`Amount::parse_tr`] and
-/// [`parse_words`].
-pub fn interpret(input: &str) -> Result<Outcome, Error>
-{
-    if input.trim().is_empty()
-    {
-        return Ok(Outcome::Idle);
-    }
-    if words::looks_like_words(input)
-    {
-        return words::parse_words(input).map(Outcome::FromWords);
-    }
-    Amount::parse_tr(input).map(Outcome::FromNumber)
 }
 
 /// Every way an amount can fail to parse or to be read.
@@ -179,6 +171,29 @@ impl std::fmt::Display for Error
     }
 }
 
+/// Routes raw input to the digits path or the words path.
+///
+/// The words path runs when any token is a Turkish number word or a currency
+/// token, so `2 milyon 500 bin`, `1.250.000,75 lira` and `1.250.000,75` all
+/// reach the same amount.
+///
+/// # Errors
+///
+/// Returns whatever the chosen parser reports; see [`Amount::parse_tr`] and
+/// [`parse_words`].
+pub fn interpret(input: &str) -> Result<Outcome, Error>
+{
+    if input.trim().is_empty()
+    {
+        return Ok(Outcome::Idle);
+    }
+    if words::looks_like_words(input)
+    {
+        return words::parse_words(input).map(Outcome::FromWords);
+    }
+    Amount::parse_tr(input).map(Outcome::FromNumber)
+}
+
 /// Helpers shared by the unit tests of this crate.
 #[cfg(test)]
 pub(crate) mod testing
@@ -197,14 +212,7 @@ mod tests
 {
     //! Unit tests for input routing and the redenomination era.
 
-    use super::{
-        Amount,
-        Era,
-        Outcome,
-        conversion_multiplies,
-        interpret,
-        other_era,
-    };
+    use super::{Amount, Era, Outcome, interpret};
 
     /// Borrows the amount out of an outcome, if it holds one.
     fn amount_of(outcome: &Outcome) -> Option<&Amount>
@@ -258,10 +266,10 @@ mod tests
     #[test]
     fn maps_the_redenomination_direction()
     {
-        assert_eq!(other_era(Era::OldTrl), Era::NewTry);
-        assert_eq!(other_era(Era::NewTry), Era::OldTrl);
-        assert!(!conversion_multiplies(Era::OldTrl));
-        assert!(conversion_multiplies(Era::NewTry));
+        assert_eq!(Era::OldTrl.other_era(), Era::NewTry);
+        assert_eq!(Era::NewTry.other_era(), Era::OldTrl);
+        assert!(!Era::OldTrl.conversion_multiplies());
+        assert!(Era::NewTry.conversion_multiplies());
         assert_eq!(Era::default(), Era::NewTry);
     }
 }

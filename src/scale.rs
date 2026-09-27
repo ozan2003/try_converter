@@ -165,6 +165,7 @@ pub fn index_of(name: &str) -> Option<usize>
     {
         return Some(index);
     }
+
     SYNONYMS
         .iter()
         .find(|(alternative, _)| *alternative == name)
@@ -183,6 +184,7 @@ pub fn value_digits(index: usize) -> Option<String>
     {
         return None;
     }
+
     let zeros = index.saturating_add(1).saturating_mul(3);
     let mut digits = String::with_capacity(zeros.saturating_add(1));
     digits.push('1');

@@ -42,6 +42,7 @@ impl Amount
     pub fn to_words_lira(&self) -> Result<String, Error>
     {
         let (rounded, dropped) = self.rounded_to(2)?;
+
         let mut clauses: Vec<String> = Vec::new();
         if rounded.int_digits() != "0"
         {
@@ -53,6 +54,7 @@ impl Amount
         {
             clauses.push(format!("{} kuruş", group_words(u32::from(kurus))));
         }
+
         let mut reading = if clauses.is_empty()
         {
             String::from("sıfır lira")
@@ -67,10 +69,12 @@ impl Amount
             reading.push_str(&rest);
             reading.push_str(" yok sayıldı)");
         }
-        if self.sign() == crate::Sign::Negative
+
+        if self.sign() == Sign::Negative
         {
             reading.insert_str(0, "eksi ");
         }
+
         Ok(reading)
     }
 }
@@ -81,6 +85,7 @@ fn int_to_words(int: &str) -> String
     let groups = digit_groups(int);
     let top = groups.len().saturating_sub(1);
     let mut parts: Vec<String> = Vec::new();
+
     for (position, group) in groups.iter().enumerate()
     {
         let value = group.parse::<u32>().unwrap_or(0);
@@ -88,6 +93,7 @@ fn int_to_words(int: &str) -> String
         {
             continue;
         }
+
         let index = top.saturating_sub(position);
         let reading = group_words(value);
         if index == 0
@@ -107,19 +113,24 @@ fn int_to_words(int: &str) -> String
             }
         }
     }
+
     parts.join(" ")
 }
 
 /// Splits ASCII digits into 3-digit groups, most significant first.
 fn digit_groups(int: &str) -> Vec<&str>
 {
-    let head_len = int.len().checked_rem(3).unwrap_or(0);
-    let (head, tail) = int.split_at(head_len);
-    let mut groups: Vec<&str> = Vec::new();
+    let (head, tail) = {
+        let head_len = int.len().checked_rem(3).unwrap_or(0);
+        int.split_at(head_len)
+    };
+
+    let mut groups = Vec::new();
     if !head.is_empty()
     {
         groups.push(head);
     }
+
     for chunk in tail.as_bytes().chunks(3)
     {
         groups.push(std::str::from_utf8(chunk).unwrap_or_default());
@@ -134,12 +145,16 @@ fn group_words(value: u32) -> String
     let rest = value.checked_rem(100).unwrap_or(0);
     let tens = rest.checked_div(10).unwrap_or(0);
     let units = rest.checked_rem(10).unwrap_or(0);
-    let mut parts: Vec<&str> = Vec::new();
+
+    let mut parts = Vec::new();
     match hundreds
     {
         0 =>
         {},
-        1 => parts.push("yüz"),
+        1 =>
+        {
+            parts.push("yüz");
+        },
         other =>
         {
             if let Some(word) = UNITS.get(usize::try_from(other).unwrap_or(0))
@@ -149,16 +164,19 @@ fn group_words(value: u32) -> String
             parts.push("yüz");
         },
     }
+
     if let Some(word) = TENS.get(usize::try_from(tens).unwrap_or(0)) &&
         !word.is_empty()
     {
         parts.push(word);
     }
+
     if let Some(word) = UNITS.get(usize::try_from(units).unwrap_or(0)) &&
         !word.is_empty()
     {
         parts.push(word);
     }
+
     parts.join(" ")
 }
 
@@ -166,14 +184,17 @@ fn group_words(value: u32) -> String
 fn kurus_of(frac: &str) -> u8
 {
     let mut digits = frac.chars();
+
     let tens = digits
         .next()
-        .and_then(|character| character.to_digit(10))
+        .and_then(|ch| ch.to_digit(10))
         .unwrap_or(0);
+
     let units = digits
         .next()
-        .and_then(|character| character.to_digit(10))
+        .and_then(|ch| ch.to_digit(10))
         .unwrap_or(0);
+
     let value = tens.saturating_mul(10).saturating_add(units);
     u8::try_from(value).unwrap_or(0)
 }
@@ -267,18 +288,22 @@ impl WordParser
         // The lira unit token carries no value of its own, so a lone `sıfır`
         // may keep it: `sıfır lira` is how the app reads zero aloud.
         let unit_token = LIRA_TOKENS.contains(&token);
+
         if !bare_zero && !unit_token
         {
             self.other_tokens = self.other_tokens.saturating_add(1);
         }
+
         if self.has_encountered_zero && self.other_tokens > 0
         {
             return Err(Error::StrayZero);
         }
+
         if token == "sıfır"
         {
             return self.push_zero();
         }
+
         if token == "eksi" || token == "-"
         {
             if index != 0 || self.has_encountered_negative
@@ -288,22 +313,27 @@ impl WordParser
             self.has_encountered_negative = true;
             return Ok(());
         }
+
         if let Some(scale_index) = scale::index_of(token)
         {
             return self.push_scale(scale_index, token);
         }
+
         if LIRA_TOKENS.contains(&token)
         {
             return self.push_lira(token);
         }
+
         if KURUS_TOKENS.contains(&token)
         {
             return self.push_kurus();
         }
+
         if let Some((value, position)) = number_word(token)
         {
             return self.push_number_word(value, position, token);
         }
+
         if token
             .chars()
             .next()
@@ -311,6 +341,7 @@ impl WordParser
         {
             return self.push_literal(token);
         }
+
         Err(Error::UnknownWord(token.into()))
     }
 
@@ -344,6 +375,7 @@ impl WordParser
         {
             return Err(Error::UnexpectedToken(token.into()));
         }
+
         self.value_tokens = self.value_tokens.saturating_add(1);
         match position
         {
@@ -353,6 +385,7 @@ impl WordParser
                 {
                     return Err(Error::GroupOutOfRange);
                 }
+
                 if self.filled.has_units
                 {
                     let units = self.pending.unwrap_or(0);
@@ -406,20 +439,24 @@ impl WordParser
         {
             return Err(Error::UnexpectedToken(token.into()));
         }
+
         if self.literal.is_some()
         {
             return Err(Error::GroupOutOfRange);
         }
+
         if self.is_scale_used(scale_index)
         {
             return Err(Error::DuplicateScale(token.into()));
         }
+
         if self
             .last_scale
             .is_some_and(|last| scale_index >= last)
         {
             return Err(Error::ScaleOrder);
         }
+
         let value = self.pending.unwrap_or(1);
         if !(1..=999).contains(&value)
         {
@@ -431,6 +468,7 @@ impl WordParser
         {
             *slot = value;
         }
+
         self.mark_scale_used(scale_index);
         self.last_scale = Some(scale_index);
         self.has_any_scale = true;
@@ -483,7 +521,10 @@ impl WordParser
                     self.set_kurus(value)?;
                 }
             },
-            Column::Closed => return Err(Error::DuplicateKurus),
+            Column::Closed =>
+            {
+                return Err(Error::DuplicateKurus);
+            },
         }
         self.column = Column::Closed;
         Ok(())
@@ -496,29 +537,35 @@ impl WordParser
         {
             return Err(Error::UnexpectedToken(token.into()));
         }
+
         self.value_tokens = self.value_tokens.saturating_add(1);
         let plain = token
             .chars()
             .all(|character| character.is_ascii_digit());
+
         if plain && token.len() <= 3
         {
             if self.pending.is_some()
             {
                 return Err(Error::GroupOutOfRange);
             }
+
             let value = token.parse::<u32>().unwrap_or(0);
             if value == 0
             {
                 return self.push_zero();
             }
+
             if self.column == Column::Kurus
             {
                 return self.set_kurus(value);
             }
+
             if self.is_literal_integer()
             {
                 return Err(Error::UnexpectedToken(token.into()));
             }
+
             self.pending = Some(value);
             self.filled = GroupSlots {
                 has_hundreds: true,
@@ -527,16 +574,19 @@ impl WordParser
             };
             return Ok(());
         }
+
         if self.column == Column::Kurus
         {
             return Err(Error::KurusOutOfRange);
         }
+
         if self.has_any_scale ||
             self.pending.is_some() ||
             self.literal.is_some()
         {
             return Err(Error::ResidueTooLarge);
         }
+
         self.literal = Some(Amount::parse_tr(token)?);
         Ok(())
     }
@@ -559,6 +609,7 @@ impl WordParser
         {
             return Err(Error::DuplicateKurus);
         }
+
         if value > 99
         {
             return Err(Error::KurusOutOfRange);
@@ -591,13 +642,18 @@ impl WordParser
         {
             return Err(Error::NotANumber);
         }
+
         if self.has_encountered_zero
         {
             return Ok(Amount::zero());
         }
+
         match self.column
         {
-            Column::Integer => self.commit_integer(),
+            Column::Integer =>
+            {
+                self.commit_integer();
+            },
             Column::Kurus =>
             {
                 if let Some(value) = self.pending.take()
@@ -609,6 +665,7 @@ impl WordParser
             Column::Closed =>
             {},
         }
+
         let sign = if self.has_encountered_negative
         {
             Sign::Negative
@@ -617,11 +674,13 @@ impl WordParser
         {
             Sign::Positive
         };
+
         let int = match &self.literal
         {
             Some(amount) => amount.int_digits().to_owned(),
             None => groups_to_digits(&self.groups),
         };
+
         // Only a literal that carries a fraction can conflict with a kuruş
         // value; a whole-number literal settles the lira side on its own.
         let literal_frac = self
@@ -633,6 +692,7 @@ impl WordParser
         {
             return Err(Error::ConflictingFraction);
         }
+
         let frac = if literal_frac.is_empty()
         {
             match self.kurus
@@ -657,6 +717,7 @@ fn groups_to_digits(groups: &[u32]) -> String
     {
         return String::from("0");
     };
+
     let mut digits = String::new();
     for index in (0..=top).rev()
     {
@@ -686,12 +747,14 @@ fn number_word(token: &str) -> Option<(u32, u8)>
     {
         return Some((100, 2));
     }
+
     if let Some(index) = UNITS.iter().position(|word| *word == token)
     {
         return u32::try_from(index)
             .ok()
             .map(|value| (value, 0));
     }
+
     TENS.iter()
         .position(|word| *word == token)
         .and_then(|index| u32::try_from(index).ok())
@@ -734,6 +797,7 @@ pub fn parse_words(input: &str) -> Result<Amount, Error>
 {
     let lowered = turkish_lowercase(input);
     let mut parser = WordParser::start();
+
     for raw in lowered.split_whitespace()
     {
         let trimmed = trim_token(raw);
@@ -741,16 +805,19 @@ pub fn parse_words(input: &str) -> Result<Amount, Error>
         {
             continue;
         }
+
         // A leading `-` means negative, exactly like the word `eksi`.
         let (marker, token) = match trimmed.strip_prefix('-')
         {
             Some(rest) => ("-", rest),
             None => ("", trimmed),
         };
+
         if !marker.is_empty()
         {
             parser.push(marker)?;
         }
+
         if !token.is_empty()
         {
             parser.push(token)?;
@@ -776,8 +843,10 @@ fn trim_token(raw: &str) -> &str
 pub(crate) fn looks_like_words(input: &str) -> bool
 {
     let lowered = turkish_lowercase(input);
+
     lowered.split_whitespace().any(|raw| {
         let token = trim_token(raw);
+
         number_word(token).is_some() ||
             scale::index_of(token).is_some() ||
             LIRA_TOKENS.contains(&token) ||
