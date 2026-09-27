@@ -1,5 +1,7 @@
 //! Turkish words: reading an [`Amount`] aloud and reading an amount back.
 
+use bitvec::prelude::*;
+
 use crate::amount::Amount;
 use crate::scale::{self, SCALE_COUNT, SCALES};
 use crate::{Error, Sign};
@@ -193,11 +195,11 @@ enum Column
 struct GroupSlots
 {
     /// A hundreds word is present.
-    hundreds: bool,
+    has_hundreds: bool,
     /// A tens word is present.
-    tens: bool,
+    has_tens: bool,
     /// A units word is present.
-    units: bool,
+    has_units: bool,
 }
 
 /// Mutable state while walking the tokens of a words input.
@@ -212,7 +214,7 @@ struct WordParser
     /// Index of the scale used last, for the descending check.
     last_scale: Option<usize>,
     /// Scale indices already used, for duplicate detection.
-    used_scales: [bool; SCALE_COUNT],
+    used_scales: BitArr!(for SCALE_COUNT),
     /// A digits literal standing for a whole side on its own.
     literal: Option<Amount>,
     /// The kuruş value, once known.
@@ -220,7 +222,7 @@ struct WordParser
     /// Which side the current tokens belong to.
     column: Column,
     /// Whether any scale name was consumed.
-    any_scale: bool,
+    has_any_scale: bool,
     /// Whether `sıfır` appeared.
     has_encountered_zero: bool,
     /// Whether a leading `eksi` was consumed.
@@ -243,11 +245,11 @@ impl WordParser
             pending: None,
             filled: GroupSlots::default(),
             last_scale: None,
-            used_scales: [false; SCALE_COUNT],
+            used_scales: bitarr![0; SCALE_COUNT],
             literal: None,
             kurus: None,
             column: Column::Integer,
-            any_scale: false,
+            has_any_scale: false,
             has_encountered_zero: false,
             has_encountered_negative: false,
             other_tokens: 0,
@@ -325,7 +327,7 @@ impl WordParser
     }
 
     /// Reports whether a digits literal already stands for the integer part.
-    fn literal_integer(&self) -> bool
+    fn is_literal_integer(&self) -> bool
     {
         self.column == Column::Integer && self.literal.is_some()
     }
@@ -338,7 +340,7 @@ impl WordParser
         token: &str,
     ) -> Result<(), Error>
     {
-        if self.column == Column::Closed || self.literal_integer()
+        if self.column == Column::Closed || self.is_literal_integer()
         {
             return Err(Error::UnexpectedToken(token.into()));
         }
@@ -347,25 +349,25 @@ impl WordParser
         {
             2 =>
             {
-                if self.filled.hundreds || self.filled.tens
+                if self.filled.has_hundreds || self.filled.has_tens
                 {
                     return Err(Error::GroupOutOfRange);
                 }
-                if self.filled.units
+                if self.filled.has_units
                 {
                     let units = self.pending.unwrap_or(0);
                     self.pending = Some(units.saturating_mul(100));
-                    self.filled.units = false;
+                    self.filled.has_units = false;
                 }
                 else
                 {
                     self.pending = Some(100);
                 }
-                self.filled.hundreds = true;
+                self.filled.has_hundreds = true;
             },
             1 =>
             {
-                if self.filled.tens || self.filled.units
+                if self.filled.has_tens || self.filled.has_units
                 {
                     return Err(Error::GroupOutOfRange);
                 }
@@ -374,11 +376,11 @@ impl WordParser
                         .unwrap_or(0)
                         .saturating_add(value),
                 );
-                self.filled.tens = true;
+                self.filled.has_tens = true;
             },
             _ =>
             {
-                if self.filled.units
+                if self.filled.has_units
                 {
                     return Err(Error::GroupOutOfRange);
                 }
@@ -387,7 +389,7 @@ impl WordParser
                         .unwrap_or(0)
                         .saturating_add(value),
                 );
-                self.filled.units = true;
+                self.filled.has_units = true;
             },
         }
         Ok(())
@@ -408,7 +410,7 @@ impl WordParser
         {
             return Err(Error::GroupOutOfRange);
         }
-        if self.scale_used(scale_index)
+        if self.is_scale_used(scale_index)
         {
             return Err(Error::DuplicateScale(token.into()));
         }
@@ -431,7 +433,7 @@ impl WordParser
         }
         self.mark_scale_used(scale_index);
         self.last_scale = Some(scale_index);
-        self.any_scale = true;
+        self.has_any_scale = true;
         self.value_tokens = self.value_tokens.saturating_add(1);
         self.pending = None;
         self.filled = GroupSlots::default();
@@ -464,7 +466,7 @@ impl WordParser
         {
             Column::Integer =>
             {
-                if self.literal.is_some() || self.any_scale
+                if self.literal.is_some() || self.has_any_scale
                 {
                     return Err(Error::KurusOutOfRange);
                 }
@@ -513,15 +515,15 @@ impl WordParser
             {
                 return self.set_kurus(value);
             }
-            if self.literal_integer()
+            if self.is_literal_integer()
             {
                 return Err(Error::UnexpectedToken(token.into()));
             }
             self.pending = Some(value);
             self.filled = GroupSlots {
-                hundreds: true,
-                tens: true,
-                units: true,
+                has_hundreds: true,
+                has_tens: true,
+                has_units: true,
             };
             return Ok(());
         }
@@ -529,7 +531,9 @@ impl WordParser
         {
             return Err(Error::KurusOutOfRange);
         }
-        if self.any_scale || self.pending.is_some() || self.literal.is_some()
+        if self.has_any_scale ||
+            self.pending.is_some() ||
+            self.literal.is_some()
         {
             return Err(Error::ResidueTooLarge);
         }
@@ -564,18 +568,17 @@ impl WordParser
     }
 
     /// Reports whether a scale index was used before.
-    fn scale_used(&self, index: usize) -> bool
+    fn is_scale_used(&self, index: usize) -> bool
     {
         self.used_scales
             .get(index)
-            .copied()
-            .unwrap_or(false)
+            .is_some_and(|slot| *slot)
     }
 
     /// Marks a scale index as used.
     fn mark_scale_used(&mut self, index: usize)
     {
-        if let Some(slot) = self.used_scales.get_mut(index)
+        if let Some(mut slot) = self.used_scales.get_mut(index)
         {
             *slot = true;
         }
