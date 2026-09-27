@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.1] - 2026-09-27
 
+### Added
+
+- `README.md`, with the build steps, the input rules, the examples and the scale provenance, plus an
+  MIT license (the manifest now carries `license = "MIT"`).
+
 ### Changed
 
 - The default input era is now the new lira (TRY): the app opens anchored to the era people
