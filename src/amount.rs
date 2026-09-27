@@ -29,7 +29,7 @@ pub enum Sign
 /// Invariants: `int` holds ASCII digits with no leading zero except the single
 /// digit `0`; `frac` holds ASCII digits, never ends in `0`, and may be empty;
 /// `int` has at most [`MAX_INT_DIGITS`] digits and `frac` at most
-/// [`MAX_FRAC_DIGITS`].
+/// [`MAX_FRAC_DIGITS`] digits from input, plus the six a down-shift can add.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Amount
 {
@@ -184,6 +184,9 @@ impl Amount
     /// `up` multiplies by 10^6 (new lira to old lira), `false` divides (old
     /// lira to new lira). The shift is exact and never rounds.
     ///
+    /// A down-shift can widen the fraction beyond the [`MAX_FRAC_DIGITS`]
+    /// input limit, by up to the six places the shift moves.
+    ///
     /// # Errors
     ///
     /// Returns [`Error::TooManyDigits`] when the shifted integer part would
@@ -244,6 +247,24 @@ impl Amount
         let amount = Self::from_parts(self.sign, &int, &frac)?;
         let places = "0".repeat(keep_len);
         Ok((amount, Some(format!("0,{places}{dropped}"))))
+    }
+
+    /// The integer digits, without a sign.
+    pub(crate) const fn int_digits(&self) -> &str
+    {
+        self.int.as_str()
+    }
+
+    /// The fraction digits, without a leading separator.
+    pub(crate) const fn frac_digits(&self) -> &str
+    {
+        self.frac.as_str()
+    }
+
+    /// The sign of the amount.
+    pub(crate) const fn sign(&self) -> Sign
+    {
+        self.sign
     }
 }
 
@@ -600,6 +621,8 @@ mod tests
             ("1,005", "1,01", Some("0,005")),
             ("0,999", "1", Some("0,009")),
             ("1,004", "1", Some("0,004")),
+            ("-1,005", "-1,01", Some("0,005")),
+            ("9,999", "10", Some("0,009")),
         ];
         for (input, expected, remainder) in cases
         {
@@ -611,5 +634,35 @@ mod tests
             assert_eq!(rounded.grouped(), expected, "input: {input}");
             assert_eq!(dropped.as_deref(), remainder, "input: {input}");
         }
+    }
+
+    /// Rounds away every fraction digit when none is kept.
+    #[test]
+    fn rounds_to_whole_lira()
+    {
+        let amount =
+            super::Amount::parse_tr("1,5").expect("input should parse");
+        let (rounded, dropped) = amount
+            .rounded_to(0)
+            .expect("rounding should fit");
+        assert_eq!(rounded.grouped(), "2");
+        assert_eq!(dropped.as_deref(), Some("0,5"));
+    }
+
+    /// A down-shift can widen the fraction past the input limit.
+    #[test]
+    fn down_shift_widens_the_fraction()
+    {
+        let widest = format!("1,{}", "1".repeat(MAX_FRAC_DIGITS));
+        let old = super::Amount::parse_tr(&widest).expect("input should parse");
+        let new = old
+            .shifted_by_million(false)
+            .expect("shift should fit");
+        assert_eq!(new.frac_digits(), "00000111111111");
+        assert_eq!(
+            new.frac_digits().len(),
+            MAX_FRAC_DIGITS.saturating_add(super::REDENOMINATION_SHIFT),
+            "a down-shift may build a wider fraction than input accepts"
+        );
     }
 }

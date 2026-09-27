@@ -6,7 +6,7 @@
 
 pub mod amount;
 pub mod scale;
-// pub mod words;
+pub mod words;
 
 pub use amount::{Amount, MAX_FRAC_DIGITS, MAX_INT_DIGITS, Sign};
 
