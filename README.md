@@ -24,6 +24,10 @@ adds `yaklaşık` with the digits it dropped.
 
 The app never guesses. An input it cannot read produces a Turkish error message and no value.
 
+## Screenshots
+
+[![try-conv.png](https://i.postimg.cc/7Lj50npZ/try-conv.png)](https://postimg.cc/nsYVtBFy)
+
 ## Build and run
 
 1. Install the stable Rust toolchain.
@@ -53,7 +57,7 @@ Turkish words:
 ## Examples
 
 | Input | Reading |
-|---|---|
+| --- | --- |
 | `1.250.000,75` | `bir milyon iki yüz elli bin lira, yetmiş beş kuruş` |
 | `2 milyon 500 bin lira` | `iki milyon beş yüz bin lira` |
 | `0,50` | `elli kuruş` |
