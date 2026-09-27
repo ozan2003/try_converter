@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Reading an amount aloud in Turkish: `1.250.000,75` becomes `bir milyon iki yüz elli bin lira,
+  yetmiş beş kuruş`, with the two forms Turkish drops (`yüz`, not `bir yüz`; `bin`, not `bir bin`),
+  an `eksi` prefix for negative amounts, an omitted kuruş clause when there is no kuruş, and an
+  explicit `yaklaşık` mark plus the dropped digits whenever kuruş cannot hold the fraction.
 - Exact six-place decimal shift across the 2005 redenomination (multiplying and dividing by
   10^6) that never rounds or truncates, so `1.250.000,75` old lira is exactly `1,25000075` new
   lira; and half-away-from-zero rounding to kuruş that reports the digits it dropped instead of
