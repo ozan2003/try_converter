@@ -11,6 +11,9 @@ pub const MAX_INT_DIGITS: usize = 306;
 /// Largest number of fraction digits accepted from user input.
 pub const MAX_FRAC_DIGITS: usize = 8;
 
+/// How many decimal places the 2005 redenomination moved.
+const REDENOMINATION_SHIFT: usize = 6;
+
 /// Sign of an amount.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sign
@@ -175,6 +178,73 @@ impl Amount
         }
         Self::from_parts(sign, &parts.int, &parts.frac)
     }
+
+    /// Moves the decimal point six places: the 2005 redenomination factor.
+    ///
+    /// `up` multiplies by 10^6 (new lira to old lira), `false` divides (old
+    /// lira to new lira). The shift is exact and never rounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::TooManyDigits`] when the shifted integer part would
+    /// exceed [`MAX_INT_DIGITS`] digits.
+    pub fn shifted_by_million(&self, up: bool) -> Result<Self, Error>
+    {
+        if up
+        {
+            let take = REDENOMINATION_SHIFT.min(self.frac.len());
+            let (moved, rest) = self.frac.split_at(take);
+            let padding = "0".repeat(REDENOMINATION_SHIFT.saturating_sub(take));
+            let int = format!("{}{}{}", self.int, moved, padding);
+            Self::from_parts(self.sign, &int, rest)
+        }
+        else
+        {
+            let take = REDENOMINATION_SHIFT.min(self.int.len());
+            let split = self.int.len().saturating_sub(take);
+            let (head, moved) = self.int.split_at(split);
+            let padding = "0".repeat(REDENOMINATION_SHIFT.saturating_sub(take));
+            let frac = format!("{}{}{}", padding, moved, self.frac);
+            Self::from_parts(self.sign, head, &frac)
+        }
+    }
+
+    /// Rounds the fraction to `frac_digits` digits, half away from zero.
+    ///
+    /// Returns the rounded amount and, when digits were dropped, those digits
+    /// written at their own place value.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::TooManyDigits`] when rounding up carries past
+    /// [`MAX_INT_DIGITS`] integer digits.
+    pub fn rounded_to(
+        &self,
+        frac_digits: u8,
+    ) -> Result<(Self, Option<String>), Error>
+    {
+        let keep_len = usize::from(frac_digits).min(self.frac.len());
+        let (keep, dropped) = self.frac.split_at(keep_len);
+        if dropped.is_empty()
+        {
+            return Ok((self.clone(), None));
+        }
+        let rounds_up = dropped
+            .as_bytes()
+            .first()
+            .is_some_and(|byte| *byte >= b'5');
+        let (int, frac) = if rounds_up
+        {
+            increment(self.int.as_str(), keep)
+        }
+        else
+        {
+            (self.int.clone(), keep.to_owned())
+        };
+        let amount = Self::from_parts(self.sign, &int, &frac)?;
+        let places = "0".repeat(keep_len);
+        Ok((amount, Some(format!("0,{places}{dropped}"))))
+    }
 }
 
 /// An integer part and a fraction part, both holding only digits.
@@ -318,6 +388,46 @@ fn remove_dots(text: &str) -> String
         .collect()
 }
 
+/// Adds one to the last digit of `int` + `frac`, carrying leftwards.
+fn increment(int: &str, frac: &str) -> (String, String)
+{
+    let mut digits: Vec<u8> = int
+        .bytes()
+        .chain(frac.bytes())
+        .map(|byte| byte.saturating_sub(b'0'))
+        .collect();
+    let mut index = digits.len().saturating_sub(1);
+    loop
+    {
+        let digit = digits.get(index).copied().unwrap_or(0);
+        if digit < 9
+        {
+            if let Some(slot) = digits.get_mut(index)
+            {
+                *slot = digit.saturating_add(1);
+            }
+            break;
+        }
+        if let Some(slot) = digits.get_mut(index)
+        {
+            *slot = 0;
+        }
+        if index == 0
+        {
+            digits.insert(0, 1);
+            break;
+        }
+        index = index.saturating_sub(1);
+    }
+    let all: String = digits
+        .iter()
+        .map(|digit| char::from(digit.saturating_add(b'0')))
+        .collect();
+    let split = all.len().saturating_sub(frac.len());
+    let (int_out, frac_out) = all.split_at(split);
+    (int_out.to_owned(), frac_out.to_owned())
+}
+
 #[cfg(test)]
 mod tests
 {
@@ -444,5 +554,62 @@ mod tests
             longest_frac,
             "the maximum fraction length must be accepted"
         );
+    }
+
+    /// Shifts six decimal places both ways, exactly.
+    #[test]
+    fn shifts_across_the_redenomination()
+    {
+        let old = super::Amount::parse_tr("1.250.000,75")
+            .expect("input should parse");
+        let new = old
+            .shifted_by_million(false)
+            .expect("shift should fit");
+        assert_eq!(new.grouped(), "1,25000075");
+        assert_eq!(
+            new.shifted_by_million(true)
+                .expect("shift back")
+                .grouped(),
+            "1.250.000,75"
+        );
+
+        let small = super::Amount::parse_tr("5").expect("input should parse");
+        let tiny = small
+            .shifted_by_million(false)
+            .expect("shift should fit");
+        assert_eq!(tiny.grouped(), "0,000005");
+        assert_eq!(
+            tiny.shifted_by_million(true)
+                .expect("shift back")
+                .grouped(),
+            "5"
+        );
+
+        let ceiling = super::Amount::parse_tr(&"9".repeat(MAX_INT_DIGITS))
+            .expect("input should parse");
+        assert_eq!(ceiling.shifted_by_million(true), Err(Error::TooManyDigits));
+    }
+
+    /// Rounds half away from zero and reports the dropped digits.
+    #[test]
+    fn rounds_half_away_from_zero()
+    {
+        let cases = [
+            ("1,25000075", "1,25", Some("0,00000075")),
+            ("1,25", "1,25", None),
+            ("1,005", "1,01", Some("0,005")),
+            ("0,999", "1", Some("0,009")),
+            ("1,004", "1", Some("0,004")),
+        ];
+        for (input, expected, remainder) in cases
+        {
+            let amount =
+                super::Amount::parse_tr(input).expect("input should parse");
+            let (rounded, dropped) = amount
+                .rounded_to(2)
+                .expect("rounding should fit");
+            assert_eq!(rounded.grouped(), expected, "input: {input}");
+            assert_eq!(dropped.as_deref(), remainder, "input: {input}");
+        }
     }
 }
