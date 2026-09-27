@@ -1,4 +1,4 @@
-# try_conv
+# TRY-TRL Converter
 
 Reads a Turkish lira amount aloud in Turkish. Shows the same amount in the other lira era.
 
@@ -88,6 +88,10 @@ accepted on input.
 - `cargo test` runs 28 tests.
 - `cargo clippy --all-targets` must stay clean. The lint levels are strict on purpose.
 - `cargo +nightly fmt` formats the code, because `rustfmt.toml` uses unstable options.
+
+## Acknowledgements
+
+[Lira icons created by Md Tanvirul Haque - Flaticon](https://www.flaticon.com/free-icons/lira)
 
 ## License
 
