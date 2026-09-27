@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Exact six-place decimal shift across the 2005 redenomination (multiplying and dividing by
+  10^6) that never rounds or truncates, so `1.250.000,75` old lira is exactly `1,25000075` new
+  lira; and half-away-from-zero rounding to kuruş that reports the digits it dropped instead of
+  hiding them.
 - `Amount`: a decimal value held as a sign plus integer and fraction digit strings, so no amount
   is ever stored as a float. Canonical form (no leading integer zeros, no trailing fraction
   zeros, no negative zero) and a Turkish grouping renderer (`1.250.000,75`).
