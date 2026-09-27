@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   yetmiş beş kuruş`, with the two forms Turkish drops (`yüz`, not `bir yüz`; `bin`, not `bir bin`),
   an `eksi` prefix for negative amounts, an omitted kuruş clause when there is no kuruş, and an
   explicit `yaklaşık` mark plus the dropped digits whenever kuruş cannot hold the fraction.
+- Parsing Turkish amount expressions back into digits: `2 milyon 500 bin lira`, `1.250.000,75 lira`
+  and the app's own readings all round-trip, with `lira`/`kuruş`/`TL`/`TRY`/`kr` tokens,
+  Turkish-aware case folding, an `eksi` or `-` sign, and a Turkish error naming the token it could not
+  use instead of guessing.
 - Exact six-place decimal shift across the 2005 redenomination (multiplying and dividing by
   10^6) that never rounds or truncates, so `1.250.000,75` old lira is exactly `1,25000075` new
   lira; and half-away-from-zero rounding to kuruş that reports the digits it dropped instead of
