@@ -742,6 +742,21 @@ pub fn parse_words(input: &str) -> Result<Amount, Error>
     parser.finish()
 }
 
+/// Reports whether the input should go to the words parser rather than the
+/// digits parser.
+pub(crate) fn looks_like_words(input: &str) -> bool
+{
+    let lowered = turkish_lowercase(input);
+    lowered.split_whitespace().any(|token| {
+        number_word(token).is_some() ||
+            scale::index_of(token).is_some() ||
+            LIRA_TOKENS.contains(&token) ||
+            KURUS_TOKENS.contains(&token) ||
+            token == "sıfır" ||
+            token == "eksi"
+    })
+}
+
 #[cfg(test)]
 mod tests
 {
