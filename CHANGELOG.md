@@ -35,3 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such as `1.234.56` and foreign forms such as `1,234,567.89` are rejected instead of guessed.
   Limits: 306 integer digits, 8 fraction digits.
 - Turkish error messages for every parse failure, naming the offending token where there is one.
+- Input routing between the digits and the words paths, and the 2005 redenomination era model: an
+  amount is anchored to the old lira (TRL, before 2005) or the new lira (TRY, from 2009), and the
+  app shows both sides, multiplying back to old lira only when the typed amount is a new-lira one.
+- An `eframe` desktop frontend (`src/main.rs`): an era selector, one input, the Turkish reading and
+  both era blocks with their digits and readings, a red error line for anything that cannot parse,
+  and the two footer notes about the six dropped zeros and the 2005–2008 `YTL` name.
+
+### Changed
+
+- Replaced the scaffold's `egui` dependency with `eframe 0.36.2`, which re-exports `egui`.

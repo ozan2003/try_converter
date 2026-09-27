@@ -6,7 +6,7 @@ publish = false
 description = "Turkish lira amount reader: spells amounts out in Turkish and shows the 2005 redenomination equivalent"
 
 [dependencies]
-egui = "0.36.2"
+eframe = "0.36.2"
 
 [lints.clippy]
 # Base Lint Levels

@@ -717,9 +717,7 @@ pub fn parse_words(input: &str) -> Result<Amount, Error>
     let mut parser = WordParser::start();
     for raw in lowered.split_whitespace()
     {
-        let trimmed = raw.trim_matches(|character: char| {
-            !character.is_alphanumeric() && character != '-'
-        });
+        let trimmed = trim_token(raw);
         if trimmed.is_empty()
         {
             continue;
@@ -742,12 +740,25 @@ pub fn parse_words(input: &str) -> Result<Amount, Error>
     parser.finish()
 }
 
+/// Strips the surrounding punctuation from one whitespace token, keeping a
+/// leading `-` as a sign.
+///
+/// The parser and the routing gate both use this, so a token they see is
+/// classified the same way it is parsed.
+fn trim_token(raw: &str) -> &str
+{
+    raw.trim_matches(|character: char| {
+        !character.is_alphanumeric() && character != '-'
+    })
+}
+
 /// Reports whether the input should go to the words parser rather than the
 /// digits parser.
 pub(crate) fn looks_like_words(input: &str) -> bool
 {
     let lowered = turkish_lowercase(input);
-    lowered.split_whitespace().any(|token| {
+    lowered.split_whitespace().any(|raw| {
+        let token = trim_token(raw);
         number_word(token).is_some() ||
             scale::index_of(token).is_some() ||
             LIRA_TOKENS.contains(&token) ||

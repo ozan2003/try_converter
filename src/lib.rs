@@ -233,6 +233,11 @@ mod tests
             let words = interpret(input).expect("words should parse");
             assert!(matches!(words, Outcome::FromWords(_)), "input: {input}");
         }
+        let punctuated = interpret("5 lira.").expect("punctuation is ignored");
+        assert!(
+            matches!(punctuated, Outcome::FromWords(_)),
+            "got {punctuated:?}"
+        );
     }
 
     /// Both routing paths agree on the same amount.
