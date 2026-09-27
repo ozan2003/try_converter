@@ -1,8 +1,9 @@
 //! Turkish lira amount reader: reads amounts aloud in Turkish and shows the
 //! 2005 redenomination equivalent.
 //!
-//! The engine has no UI dependency: [`amount`] holds the decimal value; the
-//! scale-name and word modules land in later tasks.
+//! The engine has no UI dependency: [`amount`] holds the decimal value,
+//! [`scale`] names the short-scale powers, and [`words`] reads an amount
+//! aloud.
 
 pub mod amount;
 pub mod scale;

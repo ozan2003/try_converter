@@ -26,9 +26,7 @@ impl Amount
     /// # Errors
     ///
     /// Returns [`Error::TooManyDigits`] when rounding to kuruş would carry past
-    /// the integer digit limit, and [`Error::NotANumber`] if the amount's
-    /// fraction is longer than eight digits (impossible for amounts built
-    /// through the parsers).
+    /// the integer digit limit.
     pub fn to_words_lira(&self) -> Result<String, Error>
     {
         let (rounded, dropped) = self.rounded_to(2)?;
@@ -57,7 +55,7 @@ impl Amount
             reading.push_str(&rest);
             reading.push_str(" yok sayıldı)");
         }
-        if self.sign() == crate::Sign::Negative && !clauses.is_empty()
+        if self.sign() == crate::Sign::Negative
         {
             reading.insert_str(0, "eksi ");
         }
@@ -194,6 +192,9 @@ mod tests
             ("0,50", "elli kuruş"),
             ("1,25", "bir lira, yirmi beş kuruş"),
             ("-5", "eksi beş lira"),
+            ("101", "yüz bir lira"),
+            ("999", "dokuz yüz doksan dokuz lira"),
+            ("-0,004", "eksi sıfır lira · yaklaşık (0,004 yok sayıldı)"),
         ];
         for (input, expected) in cases
         {
