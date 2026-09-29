@@ -5,14 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.3] - 2026-09-29
 
 ### Added
 
 - `MAX_INPUT_BYTES` (8192): `interpret` and `parse_words` reject a longer raw input with
-  `Error::InputTooLong` before they lowercase or split it, so a pasted value cannot make the
-  per-frame parse work unbounded. The longest exact reading of a supported amount is 4096 bytes,
-  so every readable amount still fits.
+  `Error::InputTooLong` before they lowercase or split it, so a pasted value cannot stall the
+  per-frame parse. The longest exact reading of a supported amount is 4096 bytes, so every
+  readable amount still fits.
 
 ### Changed
 
@@ -47,9 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The default input era is now the new lira (TRY): the app opens anchored to the era people
-  actually use today, and the selector still switches back to the old lira (TRL).
+  use today, and the selector still switches back to the old lira (TRL).
 - Both output lines wrap. The largest representable amount (306 digits plus separators, about 408
-  characters) is wider than any sensible window, and wrapping shows every digit instead of
+  characters) is wider than the window, and wrapping shows every digit instead of
   clipping the line.
 - The package and the binary are named `try_conv` (were `try_trl_conv`), and the window id now
   follows the package name instead of being repeated as a literal.
@@ -64,9 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The typed era's reading is built once per frame instead of twice.
 - `Amount::grouped` reserves room for the separators it inserts, so the largest amounts no longer
   reallocate the output string.
-- The scale-table comments mark exactly the derived ranges (10^126..10^150 and so on, not the
-  attested base stems), and the `value_digits(100)` test pins the whole 10^303 string rather than
-  only its length.
+- The scale-table comments name the derived ranges (10^126..10^150, not the attested base stems),
+  and the `value_digits(100)` test pins the whole 10^303 string rather than only its length.
 
 ## [0.1.0] - 2026-09-27
 
@@ -78,21 +77,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   explicit `yaklaşık` mark plus the dropped digits whenever kuruş cannot hold the fraction.
 - Parsing Turkish amount expressions back into digits: `2 milyon 500 bin lira`, `1.250.000,75 lira`
   and the app's own exact readings round-trip, while an approximate reading's `yaklaşık` mark is
-  extra text and is not accepted as input, with `lira`/`kuruş`/`TL`/`TRY`/`kr` tokens,
-  Turkish-aware case folding, an `eksi` or `-` sign, and a Turkish error naming the token it could not
+  extra text and is rejected. Input also takes `lira`/`kuruş`/`TL`/`TRY`/`kr` tokens, Turkish-aware
+  case folding and an `eksi` or `-` sign, and reports a Turkish error naming the token it could not
   use instead of guessing.
 - Exact six-place decimal shift across the 2005 redenomination (multiplying and dividing by
   10^6) that never rounds or truncates, so `1.250.000,75` old lira is exactly `1,25000075` new
-  lira; and half-away-from-zero rounding to kuruş that reports the digits it dropped instead of
-  hiding them.
+  lira. Half-away-from-zero rounding to kuruş reports the digits it dropped instead of hiding them.
 - The 101 short-scale names Türkiye uses, `bin` (10^3) through `sentilyon` (10^303), plus the
   alternative spellings Turkish sources print (`undesilyon`/`andesilyon`, `seksdesilyon`/
-  `sesvigintilyon` and 18 more) accepted on input. The 54 names no source tabulates are derived by
-  that source's own rule and are marked as derived in the code, with the provenance recorded in the
+  `sesvigintilyon` and 18 more), are accepted on input. The 54 names no source tabulates are derived
+  by that source's own rule and marked as derived in the code, with the provenance recorded in the
   module docs.
 - `Amount`: a decimal value held as a sign plus integer and fraction digit strings, so no amount
-  is ever stored as a float. Canonical form (no leading integer zeros, no trailing fraction
-  zeros, no negative zero) and a Turkish grouping renderer (`1.250.000,75`).
+  is ever stored as a float. It canonicalises the digits (no leading integer zeros, no trailing
+  fraction zeros, no negative zero) and renders Turkish grouping (`1.250.000,75`).
 - Turkish dual-format parsing: `.` groups thousands and `,` starts the fraction; a lone dot
   followed by three digits counts as a thousands separator only when the whole text groups
   correctly, so `1.234` reads as `1234` and `1234567.89` as `1.234.567,89`, while mixed forms
