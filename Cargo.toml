@@ -3,7 +3,7 @@ name = "try_conv"
 version = "0.1.3"
 edition = "2024"
 publish = false
-license = "MIT"
+license-file = "LICENSE"
 description = "Turkish lira amount reader: spells amounts out in Turkish and shows the 2005 redenomination equivalent"
 
 [dependencies]
@@ -23,6 +23,8 @@ suspicious = { level = "warn", priority = -6 }
 doc-paragraphs-missing-punctuation = { level = "warn", priority = -8 }
 missing-docs-in-private-items = { level = "warn", priority = -9 }
 too-long-first-doc-paragraph = { level = "warn", priority = -10 }
+doc_broken_link = { level = "warn", priority = -11 }
+doc_comment_double_space_linebreaks = { level = "warn", priority = -12 }
 
 # Memory & Safety
 undocumented-unsafe-blocks = { level = "deny", priority = -10 }
