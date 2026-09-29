@@ -4,7 +4,7 @@ Reads a Turkish lira amount aloud in Turkish. Shows the same amount in the other
 
 ## Why this exists
 
-On 1 January 2005, Turkey dropped six zeros from its currency. One new lira became equal to
+On 2005-01-01, Turkey dropped six zeros from its currency. One new lira became equal to
 1,000,000 old lira. The codes are `TRL` for the old lira and `TRY` for the new lira. From 2005 to
 2008, the currency was called "Yeni Türk Lirası (YTL)". In 2009, the word "Yeni" was dropped.
 
