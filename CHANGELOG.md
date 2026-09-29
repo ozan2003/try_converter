@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-09-29
+
+### Changed
+
+- The window no longer prints the era the radio button selects. That era is what the user typed,
+  and its reading already appears on the `Okunuşu` line, so the selected era's block repeated that
+  reading word for word. The window now shows the reading once and then the other era's digits and
+  reading.
+
 ## [0.1.3] - 2026-09-29
 
 ### Added

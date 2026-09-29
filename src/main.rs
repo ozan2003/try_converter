@@ -33,8 +33,8 @@ impl eframe::App for ConverterApp
 
 impl ConverterApp
 {
-    /// Draws the era selector, the text field, both era lines and the footer
-    /// notes.
+    /// Draws the era selector, the text field, the reading with the other
+    /// era's line and the footer notes.
     fn contents(&mut self, ui: &mut egui::Ui)
     {
         ui.horizontal(|ui| {
@@ -84,15 +84,16 @@ impl ConverterApp
     /// Draws the reading of the typed amount and of its other-era equivalent.
     fn show_amount(&self, ui: &mut egui::Ui, amount: &Amount)
     {
-        // Built once per frame and reused for the typed era's block below.
-        let reading = amount.to_words_lira();
-        match &reading
+        // The era the user selected is the one they typed, so the reading says
+        // it once and only the other era gets a block: repeating the selected
+        // era would print this same reading a second time.
+        match amount.to_words_lira()
         {
             Ok(words) =>
             {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(egui::RichText::new("Okunuşu:").strong());
-                    ui.label(words.as_str());
+                    ui.label(egui::RichText::new(words.as_str()));
                 });
             },
             Err(error) =>
@@ -103,12 +104,11 @@ impl ConverterApp
 
         ui.add_space(6.0);
 
-        draw_era_line(ui, self.era, amount, reading.as_deref().ok());
         match amount.shifted_by_million(self.era.conversion_multiplies())
         {
             Ok(other) =>
             {
-                draw_era_line(ui, self.era.other_era(), &other, None);
+                draw_era_line(ui, self.era.other_era(), &other);
             },
             Err(error) =>
             {
@@ -119,12 +119,7 @@ impl ConverterApp
 }
 
 /// Draws one era's digits and reading.
-fn draw_era_line(
-    ui: &mut egui::Ui,
-    era: Era,
-    amount: &Amount,
-    words: Option<&str>,
-)
+fn draw_era_line(ui: &mut egui::Ui, era: Era, amount: &Amount)
 {
     // Both lines wrap: the ceiling can produce a 408-character digits line
     // (306 digits plus separators), which no window shows on one line.
@@ -141,13 +136,7 @@ fn draw_era_line(
         );
     });
 
-    let reading = match words
-    {
-        Some(words) => Ok(words.to_owned()),
-        None => amount.to_words_lira(),
-    };
-
-    match reading
+    match amount.to_words_lira()
     {
         Ok(words) =>
         {

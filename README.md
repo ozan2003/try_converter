@@ -9,15 +9,16 @@ On 2005-01-01, Turkey dropped six zeros from its currency. One new lira became e
 2008, the currency was called "Yeni Türk Lirası (YTL)". In 2009, the word "Yeni" was dropped.
 
 An amount written without a date is ambiguous. A reader cannot tell which era it belongs to. This
-app shows both eras at the same time, so the ambiguity disappears.
+app shows the other era next to the one you typed, so the ambiguity disappears.
 
 ## What it does
 
-Type an amount. The app shows these lines:
+Pick the era the amount is written in, then type it. The app shows two things:
 
 - The reading of the amount in Turkish, for example `bir milyon iki yüz elli bin lira, yetmiş beş kuruş`.
-- The typed era, with its digits and its reading.
 - The other era, with its exact digits and its reading.
+
+The era you picked is the one you typed, so the app does not print it back.
 
 The digits stay exact. If the fraction is longer than two digits, the reading rounds to kuruş and
 adds `yaklaşık` with the digits it dropped.
