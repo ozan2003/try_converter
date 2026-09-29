@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `MAX_INPUT_BYTES` (8192): `interpret` and `parse_words` reject a longer raw input with
+  `Error::InputTooLong` before they lowercase or split it, so a pasted value cannot make the
+  per-frame parse work unbounded. The longest exact reading of a supported amount is 4096 bytes,
+  so every readable amount still fits.
+
+### Changed
+
+- `interpret` lowercases the input once and hands the same text to the routing gate and the words
+  parser, so the two cannot disagree about a token.
+
+### Fixed
+
+- A numeric `0` is an ordinary digit token: `5 lira 0`, `5 lira 0 kuruş` and `0 kuruş` are zero
+  kuruş instead of `StrayZero`. Only the word `sıfır` must stand alone.
+- A `kuruş` token next to a fractional literal is `ConflictingFraction` whether or not it carries
+  a value: `1,50 lira kuruş` no longer parses as `1,5`, and `1,50 kuruş` no longer reports
+  `KurusOutOfRange`.
+- Only `,`, `.` and `·` are stripped from the ends of a token, so unsupported punctuation is no
+  longer dropped silently: `bir! lira` is `UnknownWord` instead of `1`.
+- A punctuation-only token is no longer classified as a number word when routing, so `1 .` reaches
+  the digits parser and reports `NotANumber` instead of parsing as `1`.
+
 ## [0.1.2] - 2026-09-27
 
 ### Changed

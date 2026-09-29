@@ -85,6 +85,8 @@ pub enum Error
     FractionTooLong,
     /// The text is not an amount at all.
     NotANumber,
+    /// The raw input is longer than [`MAX_INPUT_BYTES`].
+    InputTooLong,
     /// A word is not a Turkish number word (carries the word).
     UnknownWord(Box<str>),
     /// Scale names are not strictly descending.
@@ -133,6 +135,10 @@ impl std::fmt::Display for Error
             {
                 f.write_str("Rakam ya da sayı sözcüğü bekleniyordu")
             },
+            Self::InputTooLong => write!(
+                f,
+                "Girdi çok uzun: en fazla {MAX_INPUT_BYTES} bayt okunabilir"
+            ),
             Self::UnknownWord(word) =>
             {
                 write!(f, "Bilinmeyen sözcük: \"{word}\"")
@@ -171,6 +177,18 @@ impl std::fmt::Display for Error
     }
 }
 
+/// Largest raw input the engine reads, in bytes.
+///
+/// The widest expression the engine supports is the exact reading of a
+/// 306-digit amount, which is 4096 bytes; a fully grouped 306-digit amount with
+/// its sign, comma and fraction is 411 bytes. Twice the longer of the two
+/// leaves room for the punctuation and whitespace the parsers tolerate, and it
+/// keeps a pasted value from making the per-frame parse work unbounded.
+///
+/// [`interpret`] and [`parse_words`] reject a longer input with
+/// [`Error::InputTooLong`] before lowercasing or splitting it.
+pub const MAX_INPUT_BYTES: usize = 8192;
+
 /// Routes raw input to the digits path or the words path.
 ///
 /// The words path runs when any token is a Turkish number word or a currency
@@ -180,16 +198,26 @@ impl std::fmt::Display for Error
 /// # Errors
 ///
 /// Returns whatever the chosen parser reports; see [`Amount::parse_tr`] and
-/// [`parse_words`].
+/// [`parse_words`]. An input longer than [`MAX_INPUT_BYTES`] is
+/// [`Error::InputTooLong`].
 pub fn interpret(input: &str) -> Result<Outcome, Error>
 {
+    if input.len() > MAX_INPUT_BYTES
+    {
+        return Err(Error::InputTooLong);
+    }
+
     if input.trim().is_empty()
     {
         return Ok(Outcome::Idle);
     }
-    if words::looks_like_words(input)
+
+    // Lowercased once for both the routing gate and the words parser, so the
+    // two cannot disagree about a token.
+    let lowered = words::turkish_lowercase(input);
+    if words::looks_like_words(&lowered)
     {
-        return words::parse_words(input).map(Outcome::FromWords);
+        return words::parse_words_lowered(&lowered).map(Outcome::FromWords);
     }
     Amount::parse_tr(input).map(Outcome::FromNumber)
 }
@@ -246,6 +274,14 @@ mod tests
             matches!(punctuated, Outcome::FromWords(_)),
             "got {punctuated:?}"
         );
+        // A punctuation-only token is not a number word, so a malformed
+        // numeric input is not rescued by the words parser.
+        assert_eq!(interpret("1 ."), Err(super::Error::NotANumber));
+        assert_eq!(interpret("1 ,"), Err(super::Error::NotANumber));
+        assert_eq!(
+            interpret("bir! lira"),
+            Err(super::Error::UnknownWord("bir!".into()))
+        );
     }
 
     /// Both routing paths agree on the same amount.
@@ -271,5 +307,24 @@ mod tests
         assert!(!Era::OldTrl.conversion_multiplies());
         assert!(Era::NewTry.conversion_multiplies());
         assert_eq!(Era::default(), Era::NewTry);
+    }
+
+    /// Refuses an oversized input before any full-input transform, while the
+    /// widest expression the engine supports still fits.
+    #[test]
+    fn bounds_the_input_size()
+    {
+        let too_long = "9".repeat(super::MAX_INPUT_BYTES.saturating_add(1));
+        assert_eq!(interpret(&too_long), Err(super::Error::InputTooLong));
+
+        let widest = crate::testing::digits(&"9".repeat(super::MAX_INT_DIGITS));
+        assert_eq!(widest.int_digits().len(), super::MAX_INT_DIGITS);
+        let reading = widest.to_words_lira().expect("should read");
+        assert!(
+            reading.len() <= super::MAX_INPUT_BYTES,
+            "reading is {} bytes",
+            reading.len()
+        );
+        assert_eq!(interpret(&reading), Ok(Outcome::FromWords(widest)));
     }
 }

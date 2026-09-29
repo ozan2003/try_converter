@@ -53,6 +53,10 @@ Turkish words:
 - `2 milyon 500 bin lira`, `yüz iki lira`, `eksi beş lira`.
 - The tokens `lira`, `kuruş`, `TL`, `TRY` and `kr` are optional.
 - A leading `-` has the same meaning as the word `eksi`.
+- `0` is an ordinary digit, so `5 lira 0` and `0 kuruş` are zero kuruş; only the word `sıfır`
+  must stand alone.
+- Only `,`, `.` and `·` around a token are ignored. Any other punctuation stays part of the
+  token, so `bir! lira` is an error and not a silent `bir lira`.
 
 ## Examples
 
@@ -69,6 +73,8 @@ The same amount in the other era: `1.250.000,75` old lira is `1,25000075` new li
 ## Limits
 
 - 306 integer digits and 8 fraction digits. A larger value is an error.
+- Raw input is capped at 8192 bytes. The longest exact reading of a supported amount is 4096
+  bytes, so every readable amount fits; a longer paste is an error instead of a stall.
 - `sentilyon` (10^303) is the largest named scale, and the reason for the 306-digit limit.
 - No exchange rates and no inflation adjustment. The app converts between the two eras by a factor
   of 10^6.
@@ -85,7 +91,7 @@ accepted on input.
 
 ## Development
 
-- `cargo test` runs 28 tests.
+- `cargo test` runs all tests.
 - `cargo clippy --all-targets` must stay clean. The lint levels are strict on purpose.
 - `cargo +nightly fmt` formats the code, because `rustfmt.toml` uses unstable options.
 

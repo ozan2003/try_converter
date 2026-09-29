@@ -284,12 +284,13 @@ impl WordParser
     {
         let index = self.token_index;
         self.token_index = index.saturating_add(1);
-        let bare_zero = token == "sıfır" || token == "0";
+        // Only the word `sıfır` must stand alone. The digit token `0` is an
+        // ordinary value, so it can carry a residue or the kuruş value.
         // The lira unit token carries no value of its own, so a lone `sıfır`
         // may keep it: `sıfır lira` is how the app reads zero aloud.
         let unit_token = LIRA_TOKENS.contains(&token);
 
-        if !bare_zero && !unit_token
+        if token != "sıfır" && !unit_token
         {
             self.other_tokens = self.other_tokens.saturating_add(1);
         }
@@ -500,6 +501,16 @@ impl WordParser
     /// Handles the `kuruş` token, which closes the whole reading.
     fn push_kurus(&mut self) -> Result<(), Error>
     {
+        // A fractional literal fixes the fraction itself, so no `kuruş` token
+        // can agree with it — not even one without a value of its own.
+        if self
+            .literal
+            .as_ref()
+            .is_some_and(|amount| !amount.frac_digits().is_empty())
+        {
+            return Err(Error::ConflictingFraction);
+        }
+
         match self.column
         {
             Column::Integer =>
@@ -551,10 +562,6 @@ impl WordParser
             }
 
             let value = token.parse::<u32>().unwrap_or(0);
-            if value == 0
-            {
-                return self.push_zero();
-            }
 
             if self.column == Column::Kurus
             {
@@ -743,6 +750,13 @@ fn groups_to_digits(groups: &[u32]) -> String
 /// units).
 fn number_word(token: &str) -> Option<(u32, u8)>
 {
+    // The empty string is the unused `UNITS[0]`/`TENS[0]` sentinel. A token
+    // that is only punctuation trims to nothing and is not a number word.
+    if token.is_empty()
+    {
+        return None;
+    }
+
     if token == "yüz"
     {
         return Some((100, 2));
@@ -793,9 +807,22 @@ pub(crate) fn turkish_lowercase(input: &str) -> String
 /// input: its `yaklaşık (<remainder> yok sayıldı)` mark is extra text, so the
 /// parser rejects it with [`Error::UnknownWord`] per the grammar. A leading `-`
 /// is a sign, like the word `eksi`.
+///
+/// An input longer than [`MAX_INPUT_BYTES`](crate::MAX_INPUT_BYTES) is
+/// [`Error::InputTooLong`].
 pub fn parse_words(input: &str) -> Result<Amount, Error>
 {
-    let lowered = turkish_lowercase(input);
+    if input.len() > crate::MAX_INPUT_BYTES
+    {
+        return Err(Error::InputTooLong);
+    }
+
+    parse_words_lowered(&turkish_lowercase(input))
+}
+
+/// Reads an expression that `interpret` already lowercased.
+pub(crate) fn parse_words_lowered(lowered: &str) -> Result<Amount, Error>
+{
     let mut parser = WordParser::start();
 
     for raw in lowered.split_whitespace()
@@ -826,33 +853,37 @@ pub fn parse_words(input: &str) -> Result<Amount, Error>
     parser.finish()
 }
 
-/// Strips the surrounding punctuation from one whitespace token, keeping a
-/// leading `-` as a sign.
+/// Strips the punctuation the grammar ignores (`,`, `.`, `·`) from the ends of
+/// one whitespace token, keeping a leading `-` as a sign.
+///
+/// Nothing else is removed, so an unsupported character stays part of its
+/// token and the parser rejects it with [`Error::UnknownWord`] instead of
+/// dropping it silently.
 ///
 /// The parser and the routing gate both use this, so a token they see is
 /// classified the same way it is parsed.
 fn trim_token(raw: &str) -> &str
 {
-    raw.trim_matches(|character: char| {
-        !character.is_alphanumeric() && character != '-'
-    })
+    raw.trim_matches(|character: char| matches!(character, ',' | '.' | '·'))
 }
 
-/// Reports whether the input should go to the words parser rather than the
-/// digits parser.
-pub(crate) fn looks_like_words(input: &str) -> bool
+/// Reports whether an already lowercased input should go to the words parser
+/// rather than the digits parser.
+///
+/// [`crate::interpret`] lowercases once and hands the same text to this gate
+/// and to [`parse_words_lowered`], so both see a token the same way.
+pub(crate) fn looks_like_words(lowered: &str) -> bool
 {
-    let lowered = turkish_lowercase(input);
-
     lowered.split_whitespace().any(|raw| {
         let token = trim_token(raw);
 
-        number_word(token).is_some() ||
-            scale::index_of(token).is_some() ||
-            LIRA_TOKENS.contains(&token) ||
-            KURUS_TOKENS.contains(&token) ||
-            token == "sıfır" ||
-            token == "eksi"
+        !token.is_empty() &&
+            (number_word(token).is_some() ||
+                scale::index_of(token).is_some() ||
+                LIRA_TOKENS.contains(&token) ||
+                KURUS_TOKENS.contains(&token) ||
+                token == "sıfır" ||
+                token == "eksi")
     })
 }
 
@@ -979,6 +1010,11 @@ mod tests
             ("250 TRY", "250"),
             ("250 türk lirası", "250"),
             ("75 KR", "0,75"),
+            // A numeric zero is an ordinary digit token, so it can carry the
+            // kuruş value; only the word `sıfır` must stand alone.
+            ("5 lira 0", "5"),
+            ("5 lira 0 kuruş", "5"),
+            ("0 kuruş", "0"),
         ];
         for (input, expected) in cases
         {
@@ -1010,6 +1046,10 @@ mod tests
             ("iki lira üç milyon", crate::Error::UnexpectedToken("milyon".into())),
             ("üç kuruş iki", crate::Error::UnexpectedToken("iki".into())),
             ("1,50 lira 75 kuruş", crate::Error::ConflictingFraction),
+            // Any `kuruş` token conflicts with a fractional literal, whether
+            // it carries a value or not.
+            ("1,50 lira kuruş", crate::Error::ConflictingFraction),
+            ("1,50 kuruş", crate::Error::ConflictingFraction),
             ("TL", crate::Error::NotANumber),
             ("lira", crate::Error::NotANumber),
             ("kuruş", crate::Error::NotANumber),
@@ -1020,6 +1060,11 @@ mod tests
             ("1.250 75 lira", crate::Error::UnexpectedToken("75".into())),
             ("1.250 yetmiş beş lira", crate::Error::UnexpectedToken("yetmiş".into())),
             ("1.250 lira 75 25", crate::Error::DuplicateKurus),
+            // Only `,`, `.` and `·` are ignored around a token; any other
+            // punctuation stays part of the word, so it cannot be dropped
+            // silently.
+            ("bir! lira", crate::Error::UnknownWord("bir!".into())),
+            ("bir ' lira", crate::Error::UnknownWord("'".into())),
         ];
 
         for (input, expected) in cases
@@ -1077,5 +1122,16 @@ mod tests
                 "scale index {index} (reading: {reading})"
             );
         }
+    }
+
+    /// Refuses an oversized input before lowercasing it.
+    #[test]
+    fn rejects_oversized_input()
+    {
+        let too_long = "9".repeat(crate::MAX_INPUT_BYTES.saturating_add(1));
+        assert_eq!(
+            super::parse_words(&too_long),
+            Err(crate::Error::InputTooLong)
+        );
     }
 }
