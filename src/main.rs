@@ -1,5 +1,9 @@
+// This prevents the terminal swapning when run in windows.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //! Desktop frontend: type an amount, read it in Turkish and in the other lira
 //! era.
+
+use std::sync::Arc;
 
 use eframe::egui;
 use try_conv::{Amount, Era, Outcome, interpret};
@@ -86,7 +90,10 @@ impl ConverterApp
         {
             Ok(words) =>
             {
-                ui.add(egui::Label::new(format!("Okunuşu: {words}")).wrap());
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new("Okunuşu:").strong());
+                    ui.label(words.as_str());
+                });
             },
             Err(error) =>
             {
@@ -121,7 +128,18 @@ fn draw_era_line(
 {
     // Both lines wrap: the ceiling can produce a 408-character digits line
     // (306 digits plus separators), which no window shows on one line.
-    ui.add(egui::Label::new(format!("{}: {}", era, amount.grouped())).wrap());
+    ui.horizontal_wrapped(|ui| {
+        ui.label(
+            egui::RichText::new(format!("{}:", era))
+                .strong()
+                .size(17.0),
+        );
+        ui.label(
+            egui::RichText::new(amount.grouped())
+                .size(15.5)
+                .monospace(),
+        );
+    });
 
     let reading = match words
     {
@@ -133,7 +151,15 @@ fn draw_era_line(
     {
         Ok(words) =>
         {
-            ui.add(egui::Label::new(format!("  okunuşu: {words}")).wrap());
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(format!("  okunuşu: {words}"))
+                        .weak()
+                        .size(15.0)
+                        .italics(),
+                )
+                .wrap(),
+            );
         },
         Err(error) =>
         {
@@ -145,7 +171,8 @@ fn draw_era_line(
 /// Sets the base text sizes and the scrollbar style, in logical points.
 ///
 /// egui's defaults (13 pt body, 9 pt small) are tuned for dense desktop
-/// displays and read as small at the 125 % scaling this app was reported on.
+/// displays and read as small at the 125 % scaling.
+///
 /// They are raised by one modest step; the sizes stay in logical points, so the
 /// window's own scale factor still converts them and every display density
 /// stays proportional. Ctrl `+` / Ctrl `-` remain the per-machine override.
@@ -173,13 +200,24 @@ fn apply_text_sizes(ctx: &egui::Context)
 /// Opens the window.
 fn main() -> eframe::Result
 {
+    #[expect(
+        clippy::unwrap_in_result,
+        reason = "`from_png_bytes` returns `image::ImageError` as error \
+                  variant which is incompatible with `eframe::Result` so I \
+                  couldn't use `?`"
+    )]
+    let icon =
+        eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+            .expect("failed to load application icon");
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("TL / TRY Okunuş Çevirici")
             .with_inner_size([760.0, 360.0])
             // Logical points: 760 fits the longest reading, and 520 keeps the
             // era selector row (about 480 wide) fully visible at the minimum.
-            .with_min_inner_size([520.0, 260.0]),
+            .with_min_inner_size([520.0, 260.0])
+            .with_icon(Arc::new(icon)),
         ..Default::default()
     };
     eframe::run_native(
