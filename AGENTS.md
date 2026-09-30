@@ -62,6 +62,7 @@ crate; `src/main.rs` is the eframe window around it, and the engine has no UI de
 - Wrap temporary values in a block so they do not leak into the surrounding scope:
   `let x = { let y = 1; y + 2 };` instead of `let y = 1; let x = y + 2;`. `cargo +nightly fmt`
   expands the block onto its own lines.
+- Use verbs for predicates and boolean variables, nouns for data: `has_error` instead of `error`, `is_valid` instead of `valid`, `parse_words` instead of `words`.
 
 ## Documentation
 
