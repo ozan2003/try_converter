@@ -1,5 +1,7 @@
 //! Turkish words: reading an [`Amount`] aloud and reading an amount back.
 
+use std::borrow::Cow;
+
 use bitvec::prelude::*;
 
 use crate::amount::Amount;
@@ -42,79 +44,105 @@ impl Amount
     pub fn to_words_lira(&self) -> Result<String, Error>
     {
         let (rounded, dropped) = self.rounded_to(2)?;
-
-        let mut clauses: Vec<String> = Vec::new();
-        if rounded.int_digits() != "0"
-        {
-            clauses
-                .push(format!("{} lira", int_to_words(rounded.int_digits())));
-        }
         let kurus = kurus_of(rounded.frac_digits());
-        if kurus > 0
+
+        // Read straight into one buffer. The widest reading the engine prints
+        // runs a little over 13 bytes per integer digit, so this never grows.
+        let mut reading = String::with_capacity(
+            rounded
+                .int_digits()
+                .len()
+                .saturating_mul(14)
+                .saturating_add(24),
+        );
+
+        if self.sign() == Sign::Negative
         {
-            clauses.push(format!("{} kuruş", group_words(u32::from(kurus))));
+            reading.push_str("eksi ");
         }
 
-        let mut reading = if clauses.is_empty()
+        let has_lira = rounded.int_digits() != "0";
+        let has_kurus = kurus > 0;
+        if has_lira
         {
-            String::from("sıfır lira")
+            int_to_words_into(&mut reading, rounded.int_digits());
+            reading.push_str(" lira");
         }
-        else
+        if has_kurus && has_lira
         {
-            clauses.join(", ")
-        };
+            reading.push_str(", ");
+        }
+        if has_kurus
+        {
+            group_words_into(&mut reading, u32::from(kurus));
+            reading.push_str(" kuruş");
+        }
+        if !has_lira && !has_kurus
+        {
+            reading.push_str("sıfır lira");
+        }
         if let Some(rest) = dropped
         {
             reading.push_str(" · yaklaşık (");
             reading.push_str(&rest);
             reading.push_str(" yok sayıldı)");
         }
-
-        if self.sign() == Sign::Negative
-        {
-            reading.insert_str(0, "eksi ");
-        }
-
         Ok(reading)
     }
 }
 
-/// Reads an integer part in words, using the scale names for groups of three.
-fn int_to_words(int: &str) -> String
+/// Writes an integer part in words, using the scale names for groups of three.
+fn int_to_words_into(out: &mut String, int: &str)
 {
     let groups = digit_groups(int);
     let top = groups.len().saturating_sub(1);
-    let mut parts: Vec<String> = Vec::new();
+    let mut first = true;
 
     for (position, group) in groups.iter().enumerate()
     {
-        let value = group.parse::<u32>().unwrap_or(0);
+        let value = group.parse().unwrap_or(0);
         if value == 0
         {
             continue;
         }
 
         let index = top.saturating_sub(position);
-        let reading = group_words(value);
-        if index == 0
+        let scale = index.saturating_sub(1);
+
+        // A group below a scale name needs that name; the table always has
+        // one within [`MAX_GROUPS`], but a missing entry still writes nothing
+        // rather than dropping the group silently.
+        if index != 0 &&
+            !(index == 1 && value == 1) &&
+            SCALES.get(scale).is_none()
         {
-            parts.push(reading);
+            continue;
         }
-        else if index == 1 && value == 1
+
+        if first
         {
-            parts.push(String::from("bin"));
+            first = false;
         }
         else
         {
-            let name = index.saturating_sub(1);
-            if let Some(scale_name) = SCALES.get(name)
-            {
-                parts.push(format!("{reading} {scale_name}"));
-            }
+            out.push(' ');
+        }
+
+        if index == 0
+        {
+            group_words_into(out, value);
+        }
+        else if index == 1 && value == 1
+        {
+            out.push_str("bin");
+        }
+        else if let Some(scale_name) = SCALES.get(scale)
+        {
+            group_words_into(out, value);
+            out.push(' ');
+            out.push_str(scale_name);
         }
     }
-
-    parts.join(" ")
 }
 
 /// Splits ASCII digits into 3-digit groups, most significant first.
@@ -125,7 +153,12 @@ fn digit_groups(int: &str) -> Vec<&str>
         int.split_at(head_len)
     };
 
-    let mut groups = Vec::new();
+    let mut groups = Vec::with_capacity(
+        int.len()
+            .saturating_add(2)
+            .checked_div(3)
+            .unwrap_or(0),
+    );
     if !head.is_empty()
     {
         groups.push(head);
@@ -138,46 +171,58 @@ fn digit_groups(int: &str) -> Vec<&str>
     groups
 }
 
-/// Reads a value from 1 to 999, without a scale name.
-fn group_words(value: u32) -> String
+/// Writes a value from 1 to 999, without a scale name.
+fn group_words_into(out: &mut String, value: u32)
 {
     let hundreds = value.checked_div(100).unwrap_or(0);
     let rest = value.checked_rem(100).unwrap_or(0);
     let tens = rest.checked_div(10).unwrap_or(0);
     let units = rest.checked_rem(10).unwrap_or(0);
 
-    let mut parts = Vec::new();
+    let mut first = true;
+    let mut write = |out: &mut String, word: &str| {
+        if word.is_empty()
+        {
+            return;
+        }
+        if first
+        {
+            first = false;
+        }
+        else
+        {
+            out.push(' ');
+        }
+        out.push_str(word);
+    };
+
     match hundreds
     {
         0 =>
         {},
         1 =>
         {
-            parts.push("yüz");
+            write(out, "yüz");
         },
         other =>
         {
             if let Some(word) = UNITS.get(usize::try_from(other).unwrap_or(0))
             {
-                parts.push(word);
+                write(out, word);
             }
-            parts.push("yüz");
+            write(out, "yüz");
         },
     }
 
-    if let Some(word) = TENS.get(usize::try_from(tens).unwrap_or(0)) &&
-        !word.is_empty()
+    if let Some(word) = TENS.get(usize::try_from(tens).unwrap_or(0))
     {
-        parts.push(word);
+        write(out, word);
     }
 
-    if let Some(word) = UNITS.get(usize::try_from(units).unwrap_or(0)) &&
-        !word.is_empty()
+    if let Some(word) = UNITS.get(usize::try_from(units).unwrap_or(0))
     {
-        parts.push(word);
+        write(out, word);
     }
-
-    parts.join(" ")
 }
 
 /// Reads up to two fraction digits as a kuruş value.
@@ -712,7 +757,7 @@ impl WordParser
         {
             literal_frac.to_owned()
         };
-        Amount::from_parts(sign, &int, &frac)
+        Amount::from_parts(sign, int, frac)
     }
 }
 
@@ -725,25 +770,50 @@ fn groups_to_digits(groups: &[u32]) -> String
         return String::from("0");
     };
 
-    let mut digits = String::new();
+    let mut digits =
+        String::with_capacity(top.saturating_add(1).saturating_mul(3));
     for index in (0..=top).rev()
     {
         let value = groups.get(index).copied().unwrap_or(0);
+        let hundreds = value.checked_div(100).unwrap_or(0);
+        let tens = value
+            .checked_rem(100)
+            .unwrap_or(0)
+            .checked_div(10)
+            .unwrap_or(0);
+        let units = value.checked_rem(10).unwrap_or(0);
+
         if index == top
         {
-            digits.push_str(&value.to_string());
+            // The most significant group carries no leading zeros.
+            if hundreds > 0
+            {
+                push_digit(&mut digits, hundreds);
+                push_digit(&mut digits, tens);
+            }
+            else if tens > 0
+            {
+                push_digit(&mut digits, tens);
+            }
         }
         else
         {
-            let text = value.to_string();
-            for _ in 0..3usize.saturating_sub(text.len())
-            {
-                digits.push('0');
-            }
-            digits.push_str(&text);
+            push_digit(&mut digits, hundreds);
+            push_digit(&mut digits, tens);
         }
+        push_digit(&mut digits, units);
     }
     digits
+}
+
+/// Appends one decimal digit, `0` through `9`, to `out`.
+fn push_digit(out: &mut String, digit: u32)
+{
+    out.push(char::from(
+        u8::try_from(digit)
+            .unwrap_or(0)
+            .saturating_add(b'0'),
+    ));
 }
 
 /// Maps a number word to its value and slot (2 = hundreds, 1 = tens, 0 =
@@ -776,17 +846,38 @@ fn number_word(token: &str) -> Option<(u32, u8)>
 }
 
 /// Lowercases text with Turkish rules: `I` becomes `ı` and `İ` becomes `i`.
-pub(crate) fn turkish_lowercase(input: &str) -> String
+///
+/// Borrows the input when it is ASCII and carries no capital letter, which
+/// covers every digits-only input and every reading written without a dotted
+/// Turkish letter; anything else is lowered into a fresh string.
+pub(crate) fn turkish_lowercase(input: &str) -> Cow<'_, str>
 {
-    input
-        .chars()
-        .map(|character| match character
+    if input.is_ascii() &&
+        !input
+            .bytes()
+            .any(|byte| byte.is_ascii_uppercase())
+    {
+        return Cow::Borrowed(input);
+    }
+
+    let mut lowered = String::with_capacity(input.len());
+    for character in input.chars()
+    {
+        match character
         {
-            'I' => 'ı',
-            'İ' => 'i',
-            other => other.to_lowercase().next().unwrap_or(other),
-        })
-        .collect()
+            'I' => lowered.push('ı'),
+            'İ' => lowered.push('i'),
+            other if other.is_ascii() =>
+            {
+                lowered.push(other.to_ascii_lowercase());
+            },
+            other =>
+            {
+                lowered.push(other.to_lowercase().next().unwrap_or(other));
+            },
+        }
+    }
+    Cow::Owned(lowered)
 }
 
 /// Reads a Turkish amount expression back into an [`Amount`].

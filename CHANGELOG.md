@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-09-30
+
+### Changed
+
+- Reading an amount aloud, parsing digits and lowercasing the input build their output in one
+  buffer each, instead of through `Vec`/`String` joins, per-group temporaries and a copy that was
+  then discarded. Nothing about what the engine prints changed; a repaint of the widest supported
+  amount fell from 317 allocations to 6, and of its 4075-byte reading from 419 to 7.
+- `turkish_lowercase` borrows the input when it is ASCII and carries no capital letter, which is
+  every digits-only input, and lowers anything else into a preallocated string.
+- `interpret` validates digits and separators in one pass rather than three, and `from_parts`
+  canonicalises the digit strings it is handed in place instead of copying them.
+
 ## [0.2.0] - 2026-09-29
 
 ### Changed

@@ -212,8 +212,9 @@ pub fn interpret(input: &str) -> Result<Outcome, Error>
         return Ok(Outcome::Idle);
     }
 
-    // Lowercased once for both the routing gate and the words parser, so the
-    // two cannot disagree about a token.
+    // Lowercased once (borrowed when there is nothing to lower) for both the
+    // routing gate and the words parser, so the two cannot disagree about a
+    // token.
     let lowered = words::turkish_lowercase(input);
     if words::looks_like_words(&lowered)
     {

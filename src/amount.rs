@@ -112,7 +112,11 @@ impl Amount
         out
     }
 
-    /// Builds an amount from digit strings, canonicalising both parts.
+    /// Builds an amount from owned digit strings, canonicalising them in
+    /// place.
+    ///
+    /// Each part is trimmed rather than copied, so a caller that already holds
+    /// a `String` pays no second allocation for it.
     ///
     /// # Errors
     ///
@@ -121,31 +125,39 @@ impl Amount
     /// [`MAX_INT_DIGITS`].
     pub(crate) fn from_parts(
         sign: Sign,
-        int: &str,
-        frac: &str,
+        mut int: String,
+        mut frac: String,
     ) -> Result<Self, Error>
     {
-        if !int
-            .chars()
-            .all(|character| character.is_ascii_digit()) ||
+        if !int.bytes().all(|byte| byte.is_ascii_digit()) ||
             !frac
-                .chars()
-                .all(|character| character.is_ascii_digit())
+                .bytes()
+                .all(|byte| byte.is_ascii_digit())
         {
             return Err(Error::NotANumber);
         }
 
-        let int = {
-            let trimmed = int.trim_start_matches('0');
-            if trimmed.is_empty() { "0" } else { trimmed }
-        };
+        // A byte count, not a slice: dropping the zeros in place keeps the
+        // caller's allocation instead of copying the digits into a new one.
+        let leading = int
+            .len()
+            .saturating_sub(int.trim_start_matches('0').len());
+        if leading == int.len()
+        {
+            int.clear();
+            int.push('0');
+        }
+        else if leading > 0
+        {
+            int.drain(..leading);
+        }
 
         if int.len() > MAX_INT_DIGITS
         {
             return Err(Error::TooManyDigits);
         }
 
-        let frac = frac.trim_end_matches('0');
+        frac.truncate(frac.trim_end_matches('0').len());
         let sign = if int == "0" && frac.is_empty()
         {
             Sign::Positive
@@ -154,7 +166,7 @@ impl Amount
         {
             sign
         };
-        Ok(Self::assemble(sign, int, frac))
+        Ok(Self { sign, int, frac })
     }
 
     /// Parses digits written the Turkish way, also accepting a foreign decimal
@@ -174,16 +186,22 @@ impl Amount
             split_sign(trimmed)
         };
 
-        let allowed = |ch: char| ch.is_ascii_digit() || ch == '.' || ch == ',';
+        // One pass rejects anything outside the digits and the two separators
+        // and notes whether a digit is present at all.
+        let mut has_digit = false;
+        let readable = !body.is_empty() &&
+            body.bytes().all(|byte| match byte
+            {
+                b'0'..=b'9' =>
+                {
+                    has_digit = true;
+                    true
+                },
+                b'.' | b',' => true,
+                _ => false,
+            });
 
-        if body.is_empty() || !body.chars().all(allowed)
-        {
-            return Err(Error::NotANumber);
-        }
-
-        if !body
-            .chars()
-            .any(|character| character.is_ascii_digit())
+        if !readable || !has_digit
         {
             return Err(Error::NotANumber);
         }
@@ -193,7 +211,7 @@ impl Amount
         {
             return Err(Error::FractionTooLong);
         }
-        Self::from_parts(sign, &parts.int, &parts.frac)
+        Self::from_parts(sign, parts.int, parts.frac)
     }
 
     /// Moves the decimal point six places: the 2005 redenomination factor.
@@ -216,7 +234,7 @@ impl Amount
             let (moved, rest) = self.frac.split_at(take);
             let padding = "0".repeat(REDENOMINATION_SHIFT.saturating_sub(take));
             let int = format!("{}{}{}", self.int, moved, padding);
-            Self::from_parts(self.sign, &int, rest)
+            Self::from_parts(self.sign, int, rest.to_owned())
         }
         else
         {
@@ -225,7 +243,7 @@ impl Amount
             let (head, moved) = self.int.split_at(split);
             let padding = "0".repeat(REDENOMINATION_SHIFT.saturating_sub(take));
             let frac = format!("{}{}{}", padding, moved, self.frac);
-            Self::from_parts(self.sign, head, &frac)
+            Self::from_parts(self.sign, head.to_owned(), frac)
         }
     }
 
@@ -265,7 +283,7 @@ impl Amount
             (self.int.clone(), keep.to_owned())
         };
 
-        let amount = Self::from_parts(self.sign, &int, &frac)?;
+        let amount = Self::from_parts(self.sign, int, frac)?;
         let places = "0".repeat(keep_len);
         Ok((amount, Some(format!("0,{places}{dropped}"))))
     }
@@ -411,33 +429,48 @@ fn strip_thousands(text: &str, error: Error) -> Result<String, Error>
         return Err(Error::NotANumber);
     }
 
-    if !text
-        .chars()
-        .all(|character| character.is_ascii_digit() || character == '.')
+    // One pass does what the old three (`all`, `contains`, `filter`) did: it
+    // rejects a foreign byte and reports whether any thousands dot is there.
+    let mut has_dot = false;
+    for byte in text.bytes()
     {
-        return Err(Error::NotANumber);
+        match byte
+        {
+            b'0'..=b'9' =>
+            {},
+            b'.' =>
+            {
+                has_dot = true;
+            },
+            _ =>
+            {
+                return Err(Error::NotANumber);
+            },
+        }
     }
 
-    if text.contains('.')
+    if !has_dot
     {
-        if !is_valid_grouping(text)
-        {
-            return Err(error);
-        }
-        return Ok(text
-            .chars()
-            .filter(|character| *character != '.')
-            .collect());
+        return Ok(text.to_owned());
     }
-    Ok(text.to_owned())
+
+    if !is_valid_grouping(text)
+    {
+        return Err(error);
+    }
+
+    Ok(remove_dots(text))
 }
 
 /// Removes thousands dots from a text already proven to be well grouped.
 fn remove_dots(text: &str) -> String
 {
-    text.chars()
-        .filter(|character| *character != '.')
-        .collect()
+    let mut digits = String::with_capacity(text.len());
+    digits.extend(
+        text.chars()
+            .filter(|character| *character != '.'),
+    );
+    digits
 }
 
 /// Adds one to the last digit of `int` + `frac`, carrying leftwards.
