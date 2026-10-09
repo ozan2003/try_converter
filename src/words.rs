@@ -8,6 +8,9 @@ use crate::amount::Amount;
 use crate::scale::{self, SCALE_COUNT, SCALES};
 use crate::{Error, Sign};
 
+/// Character used for separating approximation from estimated value.
+const APPROX_SEP_CHAR: char = '·';
+
 /// Number words for 0..=9; index 0 is unused so a digit can index the array.
 const UNITS: [&str; 10] = [
     "", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz",
@@ -83,7 +86,9 @@ impl Amount
         }
         if let Some(rest) = dropped
         {
-            reading.push_str(" · yaklaşık (");
+            reading.push(' ');
+            reading.push(APPROX_SEP_CHAR);
+            reading.push_str(" yaklaşık (");
             reading.push_str(&rest);
             reading.push_str(" yok sayıldı)");
         }
@@ -955,7 +960,9 @@ pub(crate) fn parse_words_lowered(lowered: &str) -> Result<Amount, Error>
 /// classified the same way it is parsed.
 fn trim_token(raw: &str) -> &str
 {
-    raw.trim_matches(|character: char| matches!(character, ',' | '.' | '·'))
+    raw.trim_matches(|character: char| {
+        matches!(character, ',' | '.' | APPROX_SEP_CHAR)
+    })
 }
 
 /// Reports whether an already lowercased input should go to the words parser
@@ -984,6 +991,7 @@ mod tests
     //! Unit tests for the two word directions.
 
     use crate::testing::digits;
+    use crate::words::APPROX_SEP_CHAR;
 
     /// Reads whole amounts, including the special `yüz` and `bin` forms.
     #[test]
@@ -1051,7 +1059,10 @@ mod tests
             digits("3,14159")
                 .to_words_lira()
                 .expect("should read"),
-            "üç lira, on dört kuruş · yaklaşık (0,00159 yok sayıldı)"
+            format!(
+                "üç lira, on dört kuruş {} yaklaşık (0,00159 yok sayıldı)",
+                APPROX_SEP_CHAR
+            )
         );
     }
 

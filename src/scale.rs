@@ -3,7 +3,7 @@
 /// Number of scale names.
 pub const SCALE_COUNT: usize = 101;
 
-/// Scale names, index `x` reading 10^(3·(x+1)), so index 0 is `bin` and index
+/// Scale names, index `x` reading 10^(3*(x+1)), so index 0 is `bin` and index
 /// 100 is `sentilyon` (10^303).
 ///
 /// Canonical spellings come from the Turkish Wikipedia table
@@ -176,7 +176,7 @@ pub fn index_of(name: &str) -> Option<usize>
         })
 }
 
-/// Returns `10^(3·(index+1))` written in digits, or `None` past the table.
+/// Returns `10^(3*(index+1))` written in digits, or `None` past the table.
 #[must_use]
 pub fn value_digits(index: usize) -> Option<String>
 {

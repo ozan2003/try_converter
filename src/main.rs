@@ -186,29 +186,47 @@ fn apply_text_sizes(ctx: &egui::Context)
     });
 }
 
-/// Opens the window.
+/// Loads the embedded icon when the asset exists and decodes successfully.
+fn load_icon() -> Option<Arc<egui::IconData>>
+{
+    #[cfg(has_icon)]
+    {
+        /// Decodes icon bytes, returning `None` when they are not a valid PNG.
+        fn decode_icon(bytes: &[u8]) -> Option<Arc<egui::IconData>>
+        {
+            eframe::icon_data::from_png_bytes(bytes)
+                .ok()
+                .map(Arc::new)
+        }
+
+        decode_icon(include_bytes!("../assets/icon.png"))
+    }
+    #[cfg(not(has_icon))]
+    {
+        None
+    }
+}
+
+/// Opens the window, using the bundled icon when one is available.
 fn main() -> eframe::Result
 {
-    #[expect(
-        clippy::unwrap_in_result,
-        reason = "`from_png_bytes` returns `image::ImageError` as error \
-                  variant which is incompatible with `eframe::Result` so I \
-                  couldn't use `?`"
-    )]
-    let icon =
-        eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
-            .expect("failed to load application icon");
+    let viewport = egui::ViewportBuilder::default()
+        .with_title("TL / TRY Okunuş Çevirici")
+        .with_inner_size([760.0, 360.0])
+        // Logical points: 760 fits the longest reading, and 520 keeps the
+        // era selector row (about 480 wide) fully visible at the minimum.
+        .with_min_inner_size([520.0, 260.0]);
+    let viewport = match load_icon()
+    {
+        Some(icon) => viewport.with_icon(icon),
+        None => viewport,
+    };
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("TL / TRY Okunuş Çevirici")
-            .with_inner_size([760.0, 360.0])
-            // Logical points: 760 fits the longest reading, and 520 keeps the
-            // era selector row (about 480 wide) fully visible at the minimum.
-            .with_min_inner_size([520.0, 260.0])
-            .with_icon(Arc::new(icon)),
+        viewport,
         ..Default::default()
     };
+
     eframe::run_native(
         env!("CARGO_PKG_NAME"),
         options,
@@ -217,4 +235,33 @@ fn main() -> eframe::Result
             Ok(Box::new(ConverterApp::default()))
         }),
     )
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::{decode_icon, load_icon};
+
+    /// Keeps malformed embedded image data from preventing app startup.
+    #[test]
+    fn ignores_invalid_icon_data()
+    {
+        assert!(decode_icon(b"not a png").is_none());
+    }
+
+    /// Embeds and decodes the icon when the asset is present at build time.
+    #[cfg(has_icon)]
+    #[test]
+    fn loads_the_bundled_icon()
+    {
+        assert!(load_icon().is_some());
+    }
+
+    /// Builds and starts with no custom icon when the asset is absent.
+    #[cfg(not(has_icon))]
+    #[test]
+    fn omits_a_missing_icon()
+    {
+        assert!(load_icon().is_none());
+    }
 }

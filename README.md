@@ -37,6 +37,8 @@ The app never guesses. An input it cannot read produces a Turkish error message 
 
 The window and its messages are in Turkish. The app starts anchored to the new lira (TRY). If the
 amount is an old-lira one, use the era selector.
+The icon is embedded when `assets/icon.png` exists at build time. If it is missing or invalid, the
+app still opens without a custom icon.
 
 ## Input
 
